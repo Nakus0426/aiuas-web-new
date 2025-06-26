@@ -10,8 +10,11 @@ import {
 	ClockStep,
 	HeadingPitchRange,
 	Matrix4,
+	Entity,
+	Camera,
 } from 'cesium'
-import type { ShallowRef } from 'vue'
+import { isArray } from 'es-toolkit/compat'
+import { type ShallowRef } from 'vue'
 
 const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HTMLDivElement>) => {
 	//#region 初始化
@@ -37,6 +40,7 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 		})
 		viewer.value.scene.globe.depthTestAgainstTerrain = true
 		viewer.value.resolutionScale = window.devicePixelRatio
+		Camera.DEFAULT_OFFSET = new HeadingPitchRange(0, CesiumMath.toRadians(defaultPitchDegree.value), 0)
 	}
 
 	onMounted(async () => {
@@ -53,7 +57,8 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 	//#endregion
 
 	// #region 视角控制
-	const defaultPitchDegree = computed(() => -45)
+	const isScene3D = ref(true)
+	const defaultPitchDegree = computed(() => (isScene3D.value ? -45 : -88))
 
 	function resetCamera() {
 		const centerPosition = viewer.value.camera.pickEllipsoid(
@@ -81,9 +86,22 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 		}
 		viewer.value.clock.onTick.addEventListener(Execution)
 	}
+
+	function flyToPosition(position: Cartesian3 | Cartesian3[]) {
+		let tempEntity: Entity
+		const tempEntityOptions = isArray(position)
+			? { polyline: { positions: position, clampToGround: true } }
+			: { position: position }
+		tempEntity = viewer.value.entities.add(tempEntityOptions)
+		viewer.value.flyTo(tempEntity, { duration: 0.2 })
+	}
+
+	function flyToEntity(entity: Entity | Entity[]) {
+		viewer.value.flyTo(entity, { duration: 0.2 })
+	}
 	// #endregion
 
-	return { viewer, defaultPitchDegree, resetCamera }
+	return { viewer, defaultPitchDegree, resetCamera, flyToPosition, flyToEntity }
 })
 
 export { useProvideHook, useHook }

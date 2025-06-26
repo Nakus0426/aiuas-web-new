@@ -8,7 +8,9 @@ const { footer = true } = defineProps<{ footer?: boolean }>()
 
 const containerRef = useTemplateRef('container')
 
-useProvideHook(containerRef)
+const { flyToPosition, flyToEntity } = useProvideHook(containerRef)
+
+defineExpose({ flyToPosition, flyToEntity })
 </script>
 
 <template>

@@ -10,6 +10,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     Cesium: typeof import('./components/cesium/index.vue')['default']
     ConfigProvider: typeof import('./components/config-provider/index.vue')['default']
+    Icon: typeof import('@iconify/vue')['Icon']
     NConfigProvider: typeof import('naive-ui')['NConfigProvider']
     NDialogProvider: typeof import('naive-ui')['NDialogProvider']
     NElement: typeof import('naive-ui')['NElement']

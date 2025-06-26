@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { isNotNil } from 'es-toolkit'
 import { useHook } from './hook'
-import { Math as CesiumMath } from 'cesium'
+import { Cartesian2, Cartesian3, Cartographic, Math as CesiumMath } from 'cesium'
 
-const { viewer, resetCamera } = useHook()
+const { viewer, resetCamera, flyToPosition } = useHook()
 
 watchOnce(viewer, () => {
 	initCompass()
@@ -55,13 +55,68 @@ function handleCompassClick() {
 	compassTransform.value = ''
 }
 // #endregion
+
+// #region 放大缩小
+function handleZoomClick(zoomIn: boolean) {
+	const { heading, pitch, roll, position } = viewer.value.camera
+	const screenCenterPosition = viewer.value.camera.pickEllipsoid(
+		new Cartesian2(viewer.value.canvas.clientWidth / 2, viewer.value.canvas.clientHeight / 2),
+		viewer.value.scene.globe.ellipsoid,
+	)
+	if (!screenCenterPosition) return
+	const toCamera = Cartesian3.subtract(position, screenCenterPosition, new Cartesian3())
+	const newDistance = Cartesian3.magnitude(toCamera) * (zoomIn ? 0.5 : 1.5)
+	Cartesian3.normalize(toCamera, toCamera)
+	const targetPosition = Cartesian3.add(
+		screenCenterPosition,
+		Cartesian3.multiplyByScalar(toCamera, newDistance, new Cartesian3()),
+		new Cartesian3(),
+	)
+	viewer.value.camera.flyTo({
+		destination: targetPosition,
+		duration: 0.2,
+		orientation: { heading, pitch, roll },
+	})
+}
+// #endregion
 </script>
 
 <template>
 	<div class="cesium-controls">
-		<button class="compass" @click="handleCompassClick()">
-			<img :style="{ transform: compassTransform }" alt="compass" src="@/assets/images/cesium-compass.svg" />
-		</button>
+		<div class="button-group">
+			<NTooltip>
+				<template #trigger>
+					<button @click="handleZoomClick(false)">
+						<Icon icon="tabler:minus" />
+					</button>
+				</template>
+				缩小
+			</NTooltip>
+			<NTooltip>
+				<template #trigger>
+					<button @click="handleZoomClick(true)">
+						<Icon icon="tabler:plus" />
+					</button>
+				</template>
+				放大
+			</NTooltip>
+		</div>
+		<NTooltip>
+			<template #trigger>
+				<button class="button location">
+					<Icon icon="tabler:current-location-filled" />
+				</button>
+			</template>
+			重置视角
+		</NTooltip>
+		<NTooltip>
+			<template #trigger>
+				<button class="button compass" @click="handleCompassClick()">
+					<img :style="{ transform: compassTransform }" alt="compass" src="@/assets/images/cesium-compass.svg" />
+				</button>
+			</template>
+			重置方位和俯仰角
+		</NTooltip>
 	</div>
 </template>
 
@@ -72,27 +127,65 @@ function handleCompassClick() {
 	bottom: 40px;
 	display: flex;
 	align-items: center;
-	gap: 20px;
+	gap: 10px;
 }
 
-.compass {
+.button {
 	width: 40px;
 	height: 40px;
 	display: flex;
 	justify-content: center;
 	align-items: center;
 	background-color: var(--card-color);
-	border-radius: 50%;
+	border-radius: 20px;
 	box-shadow: var(--box-shadow-1);
-	border: none;
+	border: 1px solid var(--border-color);
 	cursor: pointer;
 	opacity: 0.7;
 	transition: all 0.2s var(--cubic-bezier-ease-in-out);
+	font-size: 20px;
+	color: var(--text-color-2);
 
 	&:hover {
 		opacity: 1;
 	}
 
+	&:active {
+		background-color: var(--hover-color);
+	}
+
+	&-group {
+		height: 40px;
+		display: flex;
+		border-radius: 20px;
+		border: 1px solid var(--border-color);
+		color: var(--text-color-2);
+		overflow: hidden;
+
+		button {
+			width: 40px;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			border: none;
+			opacity: 0.7;
+			background-color: var(--card-color);
+			cursor: pointer;
+			font-size: 20px;
+			transition: all 0.2s var(--cubic-bezier-ease-in-out);
+
+			&:hover {
+				opacity: 1;
+			}
+
+			&:active {
+				background-color: var(--hover-color);
+			}
+		}
+	}
+}
+
+.compass {
 	img {
 		transform-style: preserve-3d;
 	}
