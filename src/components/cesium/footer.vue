@@ -94,8 +94,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-	<div class="cesium_footer">
-		<div class="cesium_footer_prefix">
+	<div class="cesium-footer">
+		<div class="cesium-footer_prefix">
 			<NTooltip>
 				<template #trigger>
 					<span>{{ longitudeText }}</span>
@@ -121,7 +121,7 @@ onBeforeUnmount(() => {
 				海拔高度
 			</NTooltip>
 		</div>
-		<div class="cesium_footer_suffix">
+		<div class="cesium-footer_suffix">
 			<NTooltip>
 				<template #trigger>
 					<div class="scale" :style="{ width: scale.width }" v-show="scale.value > 0">
@@ -136,7 +136,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
-.cesium_footer {
+.cesium-footer {
 	position: absolute;
 	bottom: 0;
 	left: 0;

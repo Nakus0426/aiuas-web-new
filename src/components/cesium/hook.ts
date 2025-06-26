@@ -1,4 +1,16 @@
-import { SceneMode, ShadowMode, Viewer } from 'cesium'
+import {
+	Cartesian2,
+	SceneMode,
+	ShadowMode,
+	Viewer,
+	Math as CesiumMath,
+	Cartesian3,
+	JulianDate,
+	ClockRange,
+	ClockStep,
+	HeadingPitchRange,
+	Matrix4,
+} from 'cesium'
 import type { ShallowRef } from 'vue'
 
 const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HTMLDivElement>) => {
@@ -40,7 +52,38 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 	})
 	//#endregion
 
-	return { viewer }
+	// #region 视角控制
+	const defaultPitchDegree = computed(() => -45)
+
+	function resetCamera() {
+		const centerPosition = viewer.value.camera.pickEllipsoid(
+			new Cartesian2(viewer.value.canvas.clientWidth / 2, viewer.value.canvas.clientHeight / 2),
+		)
+		const initialPitch = viewer.value.camera.pitch
+		const angle = (CesiumMath.toRadians(defaultPitchDegree.value) - initialPitch) / 0.5
+		const distance = Cartesian3.distance(centerPosition, viewer.value.camera.positionWC)
+		const startTime = JulianDate.fromDate(new Date())
+		const stopTime = JulianDate.addSeconds(startTime, 0.5, new JulianDate())
+		viewer.value.clock.startTime = startTime
+		viewer.value.clock.stopTime = stopTime
+		viewer.value.clock.currentTime = startTime.clone()
+		viewer.value.clock.clockRange = ClockRange.CLAMPED
+		viewer.value.clock.clockStep = ClockStep.SYSTEM_CLOCK
+		const initialHeading = viewer.value.camera.heading
+		const Execution = function TimeExecution() {
+			const delTime = JulianDate.secondsDifference(viewer.value.clock.currentTime, viewer.value.clock.startTime)
+			const heading = initialHeading
+			const pitch = delTime * angle + initialPitch
+			viewer.value.camera.lookAt(centerPosition, new HeadingPitchRange(heading, pitch, distance))
+			viewer.value.camera.lookAtTransform(Matrix4.IDENTITY)
+			if (JulianDate.compare(viewer.value.clock.currentTime, viewer.value.clock.stopTime) >= 0)
+				viewer.value.clock.onTick.removeEventListener(Execution)
+		}
+		viewer.value.clock.onTick.addEventListener(Execution)
+	}
+	// #endregion
+
+	return { viewer, defaultPitchDegree, resetCamera }
 })
 
 export { useProvideHook, useHook }
