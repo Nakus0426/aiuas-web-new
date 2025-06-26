@@ -3,6 +3,8 @@ import { useProvideHook } from '@/components/cesium/hook'
 import Footer from './footer.vue'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 
+const { footer = true } = defineProps<{ footer?: boolean }>()
+
 const containerRef = useTemplateRef('container')
 
 useProvideHook(containerRef)
