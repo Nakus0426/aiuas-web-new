@@ -38,6 +38,7 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 			terrainShadows: ShadowMode.DISABLED,
 			sceneMode: SceneMode.SCENE3D,
 		})
+		viewer.value.scene.debugShowFramesPerSecond = true
 		viewer.value.scene.globe.depthTestAgainstTerrain = true
 		viewer.value.resolutionScale = window.devicePixelRatio
 		Camera.DEFAULT_OFFSET = new HeadingPitchRange(0, CesiumMath.toRadians(defaultPitchDegree.value), 0)

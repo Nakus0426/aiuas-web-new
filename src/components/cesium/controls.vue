@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { isNotNil } from 'es-toolkit'
 import { useHook } from './hook'
-import { Cartesian2, Cartesian3, Cartographic, Math as CesiumMath } from 'cesium'
+import { Cartesian2, Cartesian3, Cartographic, Math as CesiumMath, EasingFunction } from 'cesium'
 
 const { viewer, resetCamera, flyToPosition } = useHook()
 
@@ -57,27 +57,57 @@ function handleCompassClick() {
 // #endregion
 
 // #region 放大缩小
+const zoomInRef = useTemplateRef('zoomIn')
+const zoomOutRef = useTemplateRef('zoomOut')
+let zooming = false
+
 function handleZoomClick(zoomIn: boolean) {
-	const { heading, pitch, roll, position } = viewer.value.camera
-	const screenCenterPosition = viewer.value.camera.pickEllipsoid(
-		new Cartesian2(viewer.value.canvas.clientWidth / 2, viewer.value.canvas.clientHeight / 2),
-		viewer.value.scene.globe.ellipsoid,
-	)
-	if (!screenCenterPosition) return
-	const toCamera = Cartesian3.subtract(position, screenCenterPosition, new Cartesian3())
-	const newDistance = Cartesian3.magnitude(toCamera) * (zoomIn ? 0.5 : 1.5)
-	Cartesian3.normalize(toCamera, toCamera)
-	const targetPosition = Cartesian3.add(
-		screenCenterPosition,
-		Cartesian3.multiplyByScalar(toCamera, newDistance, new Cartesian3()),
-		new Cartesian3(),
-	)
-	viewer.value.camera.flyTo({
-		destination: targetPosition,
-		duration: 0.2,
-		orientation: { heading, pitch, roll },
+	return new Promise<void>(resolve => {
+		const { heading, pitch, roll, position } = viewer.value.camera
+		const screenCenterPosition = viewer.value.camera.pickEllipsoid(
+			new Cartesian2(viewer.value.canvas.clientWidth / 2, viewer.value.canvas.clientHeight / 2),
+			viewer.value.scene.globe.ellipsoid,
+		)
+		if (!screenCenterPosition) return
+		const toCamera = Cartesian3.subtract(position, screenCenterPosition, new Cartesian3())
+		const newDistance = Cartesian3.magnitude(toCamera) * (zoomIn ? 0.5 : 1.5)
+		Cartesian3.normalize(toCamera, toCamera)
+		const targetPosition = Cartesian3.add(
+			screenCenterPosition,
+			Cartesian3.multiplyByScalar(toCamera, newDistance, new Cartesian3()),
+			new Cartesian3(),
+		)
+		viewer.value.camera.flyTo({
+			destination: targetPosition,
+			duration: 0.2,
+			orientation: { heading, pitch, roll },
+			easingFunction: EasingFunction.LINEAR_NONE,
+			complete() {
+				resolve()
+			},
+		})
 	})
 }
+
+async function zoomLoopStart(zoomIn: boolean) {
+	zooming = true
+	while (zooming) {
+		await handleZoomClick(zoomIn)
+	}
+}
+
+function zoomLoopEnd() {
+	zooming = false
+}
+
+useEventListener(zoomInRef, 'mousedown', () => zoomLoopStart(true))
+useEventListener(zoomOutRef, 'mousedown', () => zoomLoopStart(false))
+useEventListener(zoomInRef, 'mouseup', zoomLoopEnd)
+useEventListener(zoomInRef, 'mouseout', zoomLoopEnd)
+useEventListener(zoomInRef, 'mouseleave', zoomLoopEnd)
+useEventListener(zoomOutRef, 'mouseup', zoomLoopEnd)
+useEventListener(zoomOutRef, 'mouseout', zoomLoopEnd)
+useEventListener(zoomOutRef, 'mouseleave', zoomLoopEnd)
 // #endregion
 </script>
 
@@ -86,7 +116,7 @@ function handleZoomClick(zoomIn: boolean) {
 		<div class="button-group">
 			<NTooltip>
 				<template #trigger>
-					<button @click="handleZoomClick(false)">
+					<button ref="zoomOut" @click="handleZoomClick(false)">
 						<Icon icon="tabler:minus" />
 					</button>
 				</template>
@@ -94,7 +124,7 @@ function handleZoomClick(zoomIn: boolean) {
 			</NTooltip>
 			<NTooltip>
 				<template #trigger>
-					<button @click="handleZoomClick(true)">
+					<button ref="zoomIn" @click="handleZoomClick(true)">
 						<Icon icon="tabler:plus" />
 					</button>
 				</template>
