@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { useHook } from '@/components/cesium/hook'
-import CesiumScreenSpaceEventSubscriber from '@/commons/CesiumScreenSpaceEventSubscriber'
-import { Cartesian2, Cartesian3, Cartographic, Math as CesiumMath, Ray, ScreenSpaceEventType } from 'cesium'
-import { isNotNil } from 'es-toolkit'
+import { EventSubscriber } from '@/commons/cesium-screen-space-event-subscriber'
+import {
+	Cartesian2,
+	Cartesian3,
+	Cartographic,
+	Math as CesiumMath,
+	Ray,
+	sampleTerrainMostDetailed,
+	ScreenSpaceEventType,
+} from 'cesium'
+import { debounce, isNotNil } from 'es-toolkit'
 
 const { viewer } = useHook()
 
@@ -11,8 +19,16 @@ watchOnce(viewer, () => {
 	initScale()
 })
 
+onBeforeUnmount(() => {
+	if (cursorPositionSubscriber) {
+		cursorPositionSubscriber.destroy()
+		cursorPositionSubscriber = null
+	}
+	viewer.value.scene.camera.changed.removeEventListener(updateScale)
+})
+
 // #region 鼠标位置
-let cursorPositionSubscriber: CesiumScreenSpaceEventSubscriber
+let cursorPositionSubscriber: EventSubscriber
 const longitude = ref<number>()
 const latitude = ref<number>()
 const ellipsoidHeight = ref<number>()
@@ -27,20 +43,23 @@ const latitudeText = computed(() => {
 })
 
 function initCursorPosition() {
-	cursorPositionSubscriber = new CesiumScreenSpaceEventSubscriber(viewer.value)
+	cursorPositionSubscriber = new EventSubscriber(viewer.value)
+	const getTerrainHeight = debounce(async (cartographic: Cartographic) => {
+		const positions = await sampleTerrainMostDetailed(viewer.value.terrainProvider, [cartographic])
+		const height = positions[0].height
+		if (!isFinite(height)) return
+		terrainHeight.value = positions[0].height
+	}, 50)
 	cursorPositionSubscriber.subscribeEvent(ScreenSpaceEventType.MOUSE_MOVE, ({ endPosition }) => {
-		const ellipsoidPosition = viewer.value.scene.camera.pickEllipsoid(endPosition, viewer.value.scene.globe.ellipsoid)
-		if (!ellipsoidPosition) return
-		const cartographic = Cartographic.fromCartesian(ellipsoidPosition)
+		const ray = viewer.value.scene.camera.getPickRay(endPosition)
+		if (!ray) return
+		const cartesian3 = viewer.value.scene.globe.pick(ray, viewer.value.scene)
+		if (!cartesian3) return
+		const cartographic = Cartographic.fromCartesian(cartesian3)
 		longitude.value = CesiumMath.toDegrees(cartographic.longitude)
 		latitude.value = CesiumMath.toDegrees(cartographic.latitude)
 		ellipsoidHeight.value = cartographic.height
-		const terrainPosition = viewer.value.scene.globe.pick(
-			new Ray(viewer.value.scene.camera.positionWC, ellipsoidPosition),
-			viewer.value.scene,
-		)
-		if (!terrainPosition) return
-		terrainHeight.value = Cartographic.fromCartesian(terrainPosition).height
+		getTerrainHeight(cartographic)
 	})
 }
 // #endregion
@@ -83,14 +102,6 @@ function findStandardValue(value: number) {
 	return SCALE_VALUE_LIST[length - 1]
 }
 // #endregion
-
-onBeforeUnmount(() => {
-	if (cursorPositionSubscriber) {
-		cursorPositionSubscriber.destroy()
-		cursorPositionSubscriber = null
-	}
-	viewer.value.scene.camera.changed.removeEventListener(updateScale)
-})
 </script>
 
 <template>

@@ -16,7 +16,7 @@ interface Subscription {
 	callback: ScreenSpaceEventHandlerCallback
 }
 
-export default class EventSubscriber {
+export class EventSubscriber {
 	private viewer: Viewer
 	private handler: ScreenSpaceEventHandler
 	private subscriptions: Subscription[] = []
@@ -108,7 +108,8 @@ export default class EventSubscriber {
 		Object.values(ScreenSpaceEventType).forEach((type: ScreenSpaceEventType) => {
 			try {
 				this.handler.removeInputAction(type)
-			} catch (e) {
+			} catch (_error) {
+				_error
 				// 忽略未注册事件的错误
 			}
 		})

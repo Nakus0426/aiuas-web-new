@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/jsconfig",
   "compilerOptions": {
     "target": "ES2016",
-    "module": "ESNext",
-    "moduleResolution": "node",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "allowJs": true,
     "strict": false,
     "jsx": "preserve",

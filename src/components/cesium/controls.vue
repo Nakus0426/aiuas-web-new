@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { isNotNil } from 'es-toolkit'
 import { useHook } from './hook'
-import { Cartesian2, Cartesian3, Cartographic, Math as CesiumMath, EasingFunction } from 'cesium'
+import { Cartesian2, Cartesian3, Math as CesiumMath, EasingFunction } from 'cesium'
 
 const { viewer, resetCamera, flyToPosition } = useHook()
 
@@ -158,6 +158,7 @@ useEventListener(zoomOutRef, 'mouseleave', zoomLoopEnd)
 	display: flex;
 	align-items: center;
 	gap: 10px;
+	pointer-events: none;
 }
 
 .button {
@@ -171,16 +172,12 @@ useEventListener(zoomOutRef, 'mouseleave', zoomLoopEnd)
 	box-shadow: var(--box-shadow-1);
 	border: 1px solid var(--border-color);
 	cursor: pointer;
-	opacity: 0.7;
 	transition: all 0.2s var(--cubic-bezier-ease-in-out);
 	font-size: 20px;
 	color: var(--text-color-2);
+	pointer-events: all;
 
 	&:hover {
-		opacity: 1;
-	}
-
-	&:active {
 		background-color: var(--hover-color);
 	}
 
@@ -191,6 +188,7 @@ useEventListener(zoomOutRef, 'mouseleave', zoomLoopEnd)
 		border: 1px solid var(--border-color);
 		color: var(--text-color-2);
 		overflow: hidden;
+		pointer-events: all;
 
 		button {
 			width: 40px;
@@ -198,17 +196,12 @@ useEventListener(zoomOutRef, 'mouseleave', zoomLoopEnd)
 			justify-content: center;
 			align-items: center;
 			border: none;
-			opacity: 0.7;
 			background-color: var(--card-color);
 			cursor: pointer;
 			font-size: 20px;
 			transition: all 0.2s var(--cubic-bezier-ease-in-out);
 
 			&:hover {
-				opacity: 1;
-			}
-
-			&:active {
 				background-color: var(--hover-color);
 			}
 		}

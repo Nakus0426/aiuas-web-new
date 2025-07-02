@@ -1,3 +1,4 @@
+import { useAppStore } from '@/stores/modules/app'
 import {
 	Cartesian2,
 	SceneMode,
@@ -12,12 +13,18 @@ import {
 	Matrix4,
 	Entity,
 	Camera,
+	Cartographic,
+	CesiumTerrainProvider,
 } from 'cesium'
 import { isArray } from 'es-toolkit/compat'
 import { type ShallowRef } from 'vue'
+import TDTPlugin from '@/commons/tdt-plugin'
+import { SUB_DOMAINS, TER_SERVICE } from '@/configs/tdt'
 
 const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HTMLDivElement>) => {
-	//#region 初始化
+	const appStore = useAppStore()
+
+	// #region 初始化
 	const viewer = shallowRef<Viewer>()
 	function init() {
 		viewer.value = new Viewer(container.value, {
@@ -42,6 +49,21 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 		viewer.value.scene.globe.depthTestAgainstTerrain = true
 		viewer.value.resolutionScale = window.devicePixelRatio
 		Camera.DEFAULT_OFFSET = new HeadingPitchRange(0, CesiumMath.toRadians(defaultPitchDegree.value), 0)
+		initTerrain()
+	}
+
+	async function initTerrain() {
+		const { offlineMapEnable, terrainRelativePath } = appStore.setting
+		let provider
+		if (offlineMapEnable)
+			provider = await CesiumTerrainProvider.fromUrl(`${window.location.origin}${terrainRelativePath}`)
+		else
+			provider = new TDTPlugin.GeoTerrainProvider({
+				url: TER_SERVICE,
+				subdomains: SUB_DOMAINS,
+				callback: () => {},
+			})
+		viewer.value.terrainProvider = provider
 	}
 
 	onMounted(async () => {
@@ -55,7 +77,7 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 			viewer.value = null
 		}
 	})
-	//#endregion
+	// #endregion
 
 	// #region 视角控制
 	const isScene3D = ref(true)
@@ -102,7 +124,27 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 	}
 	// #endregion
 
-	return { viewer, defaultPitchDegree, resetCamera, flyToPosition, flyToEntity }
+	// #region 工具函数
+	/**
+	 * 获取视野范围坐标
+	 */
+	function getViewCorners() {
+		if (CesiumMath.toDegrees(viewer.value.camera.pitch) >= 0) throw new Error('相机俯仰角必须小于0°')
+		const rectangle = viewer.value.camera.computeViewRectangle()
+		const positions = [
+			new Cartographic(rectangle.west, rectangle.north, 0),
+			new Cartographic(rectangle.east, rectangle.north, 0),
+			new Cartographic(rectangle.east, rectangle.south, 0),
+			new Cartographic(rectangle.west, rectangle.south, 0),
+		]
+		return positions.map(cartographic => ({
+			longitude: CesiumMath.toDegrees(cartographic.longitude),
+			latitude: CesiumMath.toDegrees(cartographic.latitude),
+		}))
+	}
+	// #endregion
+
+	return { viewer, defaultPitchDegree, resetCamera, flyToPosition, flyToEntity, getViewCorners }
 })
 
 export { useProvideHook, useHook }

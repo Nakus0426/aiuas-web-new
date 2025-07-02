@@ -15,6 +15,7 @@
     "@iconify/json": "^2.2.352",
     "@iconify/vue": "^5.0.0",
     "@vueuse/core": "^13.4.0",
+    "alova": "^3.3.3",
     "cesium": "1.130.1",
     "date-fns": "^4.1.0",
     "es-toolkit": "^1.39.4",

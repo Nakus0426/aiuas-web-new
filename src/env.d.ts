@@ -8,7 +8,11 @@ declare module '*.vue' {
 }
 
 /** 环境配置文件类型 */
-interface ImportMetaEnv {}
+interface ImportMetaEnv {
+	VITE_TDT_API_URL: string
+	VITE_TDT_TK: string
+	VITE_BASE_URL: string
+}
 
 interface ImportMeta {
 	readonly env: ImportMetaEnv

@@ -3,6 +3,8 @@ import { useProvideHook } from '@/components/cesium/hook'
 import Footer from './footer.vue'
 import Controls from './controls.vue'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
+import ContextMenu from './context-menu.vue'
+import Search from './search.vue'
 
 const { footer = true } = defineProps<{ footer?: boolean }>()
 
@@ -18,6 +20,10 @@ defineExpose({ flyToPosition, flyToEntity })
 		<div class="cesium_container" ref="container" />
 		<Controls />
 		<Footer v-if="footer" />
+		<ContextMenu />
+		<div class="cesium-toolbar">
+			<Search />
+		</div>
 	</div>
 </template>
 
@@ -34,6 +40,14 @@ defineExpose({ flyToPosition, flyToEntity })
 		:deep(.cesium-viewer-bottom) {
 			display: none;
 		}
+	}
+
+	&-toolbar {
+		position: absolute;
+		top: 20px;
+		left: 20px;
+		display: flex;
+		gap: 10px;
 	}
 }
 </style>

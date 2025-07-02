@@ -17,6 +17,9 @@ importers:
       '@vueuse/core':
         specifier: ^13.4.0
         version: 13.4.0(vue@3.5.17)
+      alova:
+        specifier: ^3.3.3
+        version: 3.3.3
       cesium:
         specifier: 1.130.1
         version: 1.130.1
