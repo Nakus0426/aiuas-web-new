@@ -156,7 +156,7 @@ declare global {
 	const useDevicePixelRatio: (typeof import('@vueuse/core'))['useDevicePixelRatio']
 	const useDevicesList: (typeof import('@vueuse/core'))['useDevicesList']
 	const useDialog: (typeof import('naive-ui'))['useDialog']
-	const useDict: (typeof import('src/hooks/useDict'))['useDict']
+	const useDict: (typeof import('@/hooks/use-dict'))['useDict']
 	const useDisplayMedia: (typeof import('@vueuse/core'))['useDisplayMedia']
 	const useDocumentVisibility: (typeof import('@vueuse/core'))['useDocumentVisibility']
 	const useDraggable: (typeof import('@vueuse/core'))['useDraggable']
@@ -480,7 +480,7 @@ declare module 'vue' {
 		readonly useDevicePixelRatio: UnwrapRef<(typeof import('@vueuse/core'))['useDevicePixelRatio']>
 		readonly useDevicesList: UnwrapRef<(typeof import('@vueuse/core'))['useDevicesList']>
 		readonly useDialog: UnwrapRef<(typeof import('naive-ui'))['useDialog']>
-		readonly useDict: UnwrapRef<(typeof import('src/hooks/useDict'))['useDict']>
+		readonly useDict: UnwrapRef<(typeof import('@/hooks/use-dict'))['useDict']>
 		readonly useDisplayMedia: UnwrapRef<(typeof import('@vueuse/core'))['useDisplayMedia']>
 		readonly useDocumentVisibility: UnwrapRef<(typeof import('@vueuse/core'))['useDocumentVisibility']>
 		readonly useDraggable: UnwrapRef<(typeof import('@vueuse/core'))['useDraggable']>

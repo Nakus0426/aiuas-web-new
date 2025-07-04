@@ -15,6 +15,11 @@ import {
 	Camera,
 	Cartographic,
 	CesiumTerrainProvider,
+	type EntityCollection,
+	type DataSource,
+	type ImageryLayer,
+	type Cesium3DTileset,
+	type TimeDynamicPointCloud,
 } from 'cesium'
 import { isArray } from 'es-toolkit/compat'
 import { type ShallowRef } from 'vue'
@@ -23,6 +28,7 @@ import { SUB_DOMAINS, TER_SERVICE } from '@/configs/tdt'
 
 const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HTMLDivElement>) => {
 	const appStore = useAppStore()
+	const { get: getAppConfig } = useDict('dynamic_config_front_functions')
 
 	// #region 初始化
 	const viewer = shallowRef<Viewer>()
@@ -80,8 +86,10 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 	// #endregion
 
 	// #region 视角控制
-	const isScene3D = ref(true)
+	const isScene3D = ref(getAppConfig('cesium_scene_3d') === '1')
 	const defaultPitchDegree = computed(() => (isScene3D.value ? -45 : -88))
+
+	watch(defaultPitchDegree, value => (Camera.DEFAULT_OFFSET = new HeadingPitchRange(0, CesiumMath.toRadians(value), 0)))
 
 	function resetCamera() {
 		const centerPosition = viewer.value.camera.pickEllipsoid(
@@ -119,8 +127,10 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 		viewer.value.flyTo(tempEntity, { duration: 0.2 })
 	}
 
-	function flyToEntity(entity: Entity | Entity[]) {
-		viewer.value.flyTo(entity, { duration: 0.2 })
+	function flyToTarget(
+		target: Entity | Entity[] | EntityCollection | DataSource | ImageryLayer | Cesium3DTileset | TimeDynamicPointCloud,
+	) {
+		viewer.value.flyTo(target, { duration: 0.2 })
 	}
 	// #endregion
 
@@ -144,7 +154,7 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 	}
 	// #endregion
 
-	return { viewer, defaultPitchDegree, resetCamera, flyToPosition, flyToEntity, getViewCorners }
+	return { viewer, defaultPitchDegree, resetCamera, flyToPosition, flyToTarget, getViewCorners }
 })
 
 export { useProvideHook, useHook }

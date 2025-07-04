@@ -50,7 +50,7 @@ export default defineConfig(({ mode }) => {
 					{
 						'naive-ui': ['useDialog', 'useMessage', 'useNotification', 'useLoadingBar', 'useModal', 'useThemeVars'],
 						vue: ['useTemplateRef'],
-						'src/hooks/useDict': ['useDict'],
+						'@/hooks/use-dict': ['useDict'],
 					},
 				],
 				vueTemplate: true,
