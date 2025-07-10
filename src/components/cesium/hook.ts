@@ -20,15 +20,30 @@ import {
 	type ImageryLayer,
 	type Cesium3DTileset,
 	type TimeDynamicPointCloud,
+	UrlTemplateImageryProvider,
 } from 'cesium'
 import { isArray } from 'es-toolkit/compat'
 import { type ShallowRef } from 'vue'
 import TDTPlugin from '@/commons/tdt-plugin'
-import { SUB_DOMAINS, TER_SERVICE } from '@/configs/tdt'
+import {
+	SUB_DOMAINS as TDT_SUB_DOMAINS,
+	TER_SERVICE as TDT_TER_SERVICE,
+	IMG_SERVICE as TDT_IMG_SERVICE,
+	IBO_SERVICE,
+	CIA_SERVICE as TDT_CIA_SERVICE,
+} from '@/configs/tdt'
+import {
+	SUB_DOMAINS as AMAP_SUB_DOMAINS,
+	IMG_SERVICE as AMAP_IMG_SERVICE,
+	CIA_SERVICE as AMAP_CIA_SERVICE,
+	AmapMercatorTilingScheme,
+} from '@/configs/amap'
 
 const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HTMLDivElement>) => {
 	const appStore = useAppStore()
 	const { get: getAppConfig } = useDict('dynamic_config_front_functions')
+	const { offlineMapEnable, terrainRelativePath, layerRelativePath } = appStore.setting
+	const organizationId = 'JK7VYN'
 
 	// #region 初始化
 	const viewer = shallowRef<Viewer>()
@@ -55,21 +70,7 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 		viewer.value.scene.globe.depthTestAgainstTerrain = true
 		viewer.value.resolutionScale = window.devicePixelRatio
 		Camera.DEFAULT_OFFSET = new HeadingPitchRange(0, CesiumMath.toRadians(defaultPitchDegree.value), 0)
-		initTerrain()
-	}
-
-	async function initTerrain() {
-		const { offlineMapEnable, terrainRelativePath } = appStore.setting
-		let provider
-		if (offlineMapEnable)
-			provider = await CesiumTerrainProvider.fromUrl(`${window.location.origin}${terrainRelativePath}`)
-		else
-			provider = new TDTPlugin.GeoTerrainProvider({
-				url: TER_SERVICE,
-				subdomains: SUB_DOMAINS,
-				callback: () => {},
-			})
-		viewer.value.terrainProvider = provider
+		initBaseLayer()
 	}
 
 	onMounted(async () => {
@@ -154,7 +155,61 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 	}
 	// #endregion
 
-	return { viewer, defaultPitchDegree, resetCamera, flyToPosition, flyToTarget, getViewCorners }
+	// #region 基础图层
+	async function initBaseLayer() {
+		viewer.value.imageryLayers.remove(viewer.value.imageryLayers.get(0))
+		if (offlineMapEnable) {
+			viewer.value.imageryLayers.addImageryProvider(
+				new UrlTemplateImageryProvider({ url: `${location.origin}${layerRelativePath}/{z}/{x}/{y}.png` }),
+			)
+			viewer.value.terrainProvider = await CesiumTerrainProvider.fromUrl(
+				`${window.location.origin}${terrainRelativePath}`,
+			)
+			return
+		}
+		const isImgTDT = getAppConfig('map_img_layer') === 'tdt'
+		viewer.value.imageryLayers.addImageryProvider(
+			new UrlTemplateImageryProvider({
+				url: isImgTDT ? TDT_IMG_SERVICE : AMAP_IMG_SERVICE,
+				subdomains: isImgTDT ? TDT_SUB_DOMAINS : AMAP_SUB_DOMAINS,
+				maximumLevel: 18,
+				tilingScheme: isImgTDT ? null : new AmapMercatorTilingScheme(null),
+			}),
+		)
+		viewer.value.imageryLayers.addImageryProvider(
+			new UrlTemplateImageryProvider({
+				url: IBO_SERVICE,
+				subdomains: TDT_SUB_DOMAINS,
+				maximumLevel: 10,
+			}),
+		)
+		const isCiaTDT = getAppConfig('map_cia_layer') === 'tdt'
+		viewer.value.imageryLayers.addImageryProvider(
+			new UrlTemplateImageryProvider({
+				url: isCiaTDT ? TDT_CIA_SERVICE : AMAP_CIA_SERVICE,
+				subdomains: isCiaTDT ? TDT_SUB_DOMAINS : AMAP_SUB_DOMAINS,
+				maximumLevel: 18,
+				tilingScheme: isCiaTDT ? null : new AmapMercatorTilingScheme(null),
+			}),
+		)
+		viewer.value.terrainProvider = new TDTPlugin.GeoTerrainProvider({
+			url: TDT_TER_SERVICE,
+			subdomains: TDT_SUB_DOMAINS,
+			callback: () => {},
+		})
+	}
+	// #endregion
+
+	return {
+		viewer,
+		defaultPitchDegree,
+		isScene3D,
+		organizationId,
+		resetCamera,
+		flyToPosition,
+		flyToTarget,
+		getViewCorners,
+	}
 })
 
 export { useProvideHook, useHook }

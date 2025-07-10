@@ -1,9 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/jsconfig",
   "compilerOptions": {
-    "target": "ES2016",
+    "target": "esnext",
     "module": "esnext",
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "allowJs": true,
     "strict": false,
     "jsx": "preserve",
@@ -12,7 +12,6 @@
     "esModuleInterop": true,
     "noImplicitAny": false,
     "forceConsistentCasingInFileNames": true,
-    "verbatimModuleSyntax": true,
     "types": [
       "naive-ui/volar"
     ],

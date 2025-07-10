@@ -1,3 +1,5 @@
+/// <reference types='./globals.d.ts' />
+
 import { createAlova } from 'alova'
 import FetchAdapter from 'alova/fetch'
 import VueHook from 'alova/vue'

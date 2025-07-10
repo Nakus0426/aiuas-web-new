@@ -7,7 +7,6 @@ declare module '*.vue' {
 	export default component
 }
 
-/** 环境配置文件类型 */
 interface ImportMetaEnv {
 	VITE_TDT_API_URL: string
 	VITE_TDT_TK: string

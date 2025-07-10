@@ -13,7 +13,7 @@ import ProviderContent from './provider-content.vue'
 					<NDialogProvider>
 						<NModalProvider>
 							<ProviderContent>
-								<NElement class="app">
+								<NElement class="app" id="container">
 									<slot />
 								</NElement>
 							</ProviderContent>

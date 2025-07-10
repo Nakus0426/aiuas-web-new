@@ -1,0 +1,19 @@
+:root {
+	// Scrollbar
+	.os-scrollbar {
+		z-index: 1;
+		--os-padding-perpendicular: 0 !important;
+		--os-padding-axis: 0 !important;
+		--os-handle-border-radius: calc(var(--scrollbar-width) / 2) !important;
+		--os-track-border-radius: calc(var(--scrollbar-width) / 2) !important;
+		--os-handle-bg: var(--scrollbar-color) !important;
+		--os-handle-bg-hover: var(--scrollbar-color-hover) !important;
+		--os-handle-bg-active: var(--scrollbar-color-hover) !important;
+		--os-size: var(--scrollbar-width);
+		z-index: 2;
+	}
+
+	.os-scrollbar-handle {
+		cursor: pointer;
+	}
+}

@@ -190,6 +190,12 @@ const handleDropdownSelect: OnUpdateValueImpl = key => {
 		height: 30px;
 	}
 
+	:deep(.n-input) {
+		&:hover {
+			background-color: var(--hover-color);
+		}
+	}
+
 	:deep(.n-input__border),
 	:deep(.n-input__state-border) {
 		display: none;

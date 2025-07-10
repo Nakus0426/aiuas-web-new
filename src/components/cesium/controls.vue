@@ -3,7 +3,7 @@ import { isNotNil } from 'es-toolkit'
 import { useHook } from './hook'
 import { Cartesian2, Cartesian3, Math as CesiumMath, EasingFunction } from 'cesium'
 
-const { viewer, resetCamera, flyToPosition } = useHook()
+const { viewer, isScene3D, resetCamera } = useHook()
 
 watchOnce(viewer, () => {
 	initCompass()
@@ -109,10 +109,25 @@ useEventListener(zoomOutRef, 'mouseup', zoomLoopEnd)
 useEventListener(zoomOutRef, 'mouseout', zoomLoopEnd)
 useEventListener(zoomOutRef, 'mouseleave', zoomLoopEnd)
 // #endregion
+
+// #region 二/三维切换
+function handleSceneClick() {
+	isScene3D.value = !isScene3D.value
+	resetCamera()
+}
+// #endregion
 </script>
 
 <template>
 	<div class="cesium-controls">
+		<NTooltip>
+			<template #trigger>
+				<button class="button compass" @click="handleSceneClick()">
+					<Icon height="26" width="26" :icon="isScene3D ? 'mdi:video-2d' : 'mdi:video-3d'" />
+				</button>
+			</template>
+			{{ isScene3D ? '切换至2D' : '切换至3D' }}
+		</NTooltip>
 		<div class="button-group">
 			<NTooltip>
 				<template #trigger>
@@ -187,6 +202,7 @@ useEventListener(zoomOutRef, 'mouseleave', zoomLoopEnd)
 		border-radius: 20px;
 		border: 1px solid var(--border-color);
 		color: var(--text-color-2);
+		box-shadow: var(--box-shadow-1);
 		overflow: hidden;
 		pointer-events: all;
 
