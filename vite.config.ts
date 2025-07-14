@@ -28,6 +28,11 @@ export default defineConfig(({ mode }) => {
 			port: 5174,
 			proxy: {
 				'/aiuas-system-base/': env.VITE_BASE_URL,
+				'/amap': {
+					target: 'https://restapi.amap.com',
+					changeOrigin: true,
+					rewrite: path => path.replace(/^\/amap/, ''),
+				},
 			},
 		},
 		resolve: {

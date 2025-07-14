@@ -5,78 +5,161 @@ import { type RenderLabelImpl, type RenderIconImpl, type OnUpdateValueImpl } fro
 import { useHook } from './hook'
 import { useOrderLocationIcon } from '@/hooks/use-dynamic-svg'
 import { Cartesian3, CustomDataSource, HeightReference, HorizontalOrigin, VerticalOrigin } from 'cesium'
+import { TDTApi } from '@/commons/tdt-api'
+import { AMapApi } from '@/commons/amap-api'
+import gcoord from 'gcoord'
 
 const { viewer, getViewCorners, flyToTarget } = useHook()
 const message = useMessage()
+const { get: getAppConfig } = useDict('dynamic_config_front_functions')
+const isProviderTDT = getAppConfig('map_search_service_provider') === 'tdt'
 
 // #region 获取数据
 const keyWord = ref<string>()
 const dropdownVisible = ref(false)
-
-const { loading, page, pageSize, total, data, send, onSuccess } = usePagination(
-	(page, pageSize) => {
-		try {
-			const mapBounds = getViewCorners()
-			const { longitude: leftTopLongitude, latitude: leftTopLatitude } = mapBounds[0]
-			const { longitude: rightBottomLongitude, latitude: rightBottomLatitude } = mapBounds[2]
-			return TdtApis.searchInView({
-				keyWord: keyWord.value,
-				level: '18',
-				mapBound: `${leftTopLongitude},${leftTopLatitude},${rightBottomLongitude},${rightBottomLatitude}`,
-				start: page.toString(),
-				count: pageSize.toString(),
-				show: '2',
-			})
-		} catch (e) {
-			message.error('当前视野范围不支持搜索')
-			throw e
-		}
+const TDT = new TDTApi()
+const AMap = new AMapApi(getAppConfig('map_search_service_provider_amap_key'))
+const page = computed({
+	get() {
+		return isProviderTDT ? TdtPage.value : AMapPage.value
 	},
+	set(value) {
+		isProviderTDT ? (TdtPage.value = value) : (AMapPage.value = value)
+	},
+})
+const pageSize = computed({
+	get() {
+		return isProviderTDT ? TdtPageSize.value : AMapPageSize.value
+	},
+	set(value) {
+		isProviderTDT ? (TdtPageSize.value = value) : (AMapPageSize.value = value)
+	},
+})
+let mapBound: string = null
+
+const {
+	loading: TdtLoading,
+	page: TdtPage,
+	pageSize: TdtPageSize,
+	total: TdtTotal,
+	data: TdtData,
+	send: TdtSend,
+} = usePagination(
+	(page, pageSize) =>
+		TDT.searchPoiByPolygon({
+			keyWord: keyWord.value,
+			level: '18',
+			mapBound: mapBound,
+			start: page.toString(),
+			count: pageSize.toString(),
+			show: '2',
+		}),
 	{
 		total: res => parseInt(res?.count ?? '0'),
 		data: res =>
-			res.pois.map((item, index) => ({
-				label: item.name,
-				key: item.hotPointID,
-				index: index + 1,
-				data: item,
-			})),
+			res.pois.map((item, index) => {
+				const [longitude, latitude] = item.lonlat.split(',')
+				return {
+					label: item.name,
+					key: item.hotPointID,
+					index: index + 1,
+					longitude,
+					latitude,
+					data: item,
+				}
+			}),
+		initialPage: 1,
 		initialData: { count: 0, pois: [] },
 		immediate: false,
 	},
-)
+).onSuccess(() => (dropdownVisible.value = true))
 
-onSuccess(() => (dropdownVisible.value = true))
+const {
+	loading: AMapLoading,
+	page: AMapPage,
+	pageSize: AMapPageSize,
+	data: AMapData,
+	send: AMapSend,
+} = usePagination(
+	(page, pageSize) =>
+		AMap.searchPoiByPolygon({
+			polygon: mapBound,
+			keywords: keyWord.value,
+			page_size: pageSize,
+			page_num: page,
+		}),
+	{
+		data: res =>
+			res.pois.map((item, index) => {
+				const [longitudeGCJ02, latitudeGCJ02] = item.location.split(',')
+				const [longitude, latitude] = gcoord.transform(
+					[Number(longitudeGCJ02), Number(latitudeGCJ02)],
+					gcoord.GCJ02,
+					gcoord.WGS84,
+				)
+				return {
+					label: item.name,
+					key: item.id,
+					index: index + 1,
+					longitude,
+					latitude,
+					data: item,
+				}
+			}),
+		initialData: { count: 0, pois: [] },
+		immediate: false,
+	},
+).onSuccess(() => (dropdownVisible.value = true))
+
+function search() {
+	try {
+		const mapBounds = getViewCorners()
+		const { longitude: leftTopLongitude, latitude: leftTopLatitude } = mapBounds[0]
+		const { longitude: rightBottomLongitude, latitude: rightBottomLatitude } = mapBounds[2]
+		mapBound = `${leftTopLongitude},${leftTopLatitude}${isProviderTDT ? ',' : '|'}${rightBottomLongitude},${rightBottomLatitude}`
+		isProviderTDT ? TdtSend() : AMapSend()
+	} catch (e) {
+		message.error('当前视野范围不支持搜索')
+		throw e
+	}
+}
 // #endregion
 
 // #region 渲染下拉菜单选项
 const { generateStr: generateIconStr, generateElement: generateIconElement } = useOrderLocationIcon()
-const options = computed(() => [
-	...data.value,
-	{
-		key: 'footer',
-		type: 'render',
-		render: () => (
-			<>
-				{data.value.length > 0 ? (
-					<div class="footer">
-						<NPagination
-							page={page.value}
-							itemCount={total.value}
-							pageSize={pageSize.value}
-							size="small"
-							pageSlot={5}
-						/>
-					</div>
-				) : (
-					<div class="empty">
-						<NEmpty size="small" />
-					</div>
-				)}
-			</>
-		),
-	},
-])
+const options = computed(() => {
+	const data = isProviderTDT ? TdtData.value : AMapData.value
+	return [
+		...data,
+		{
+			key: 'footer',
+			type: 'render',
+			render: () => (
+				<>
+					{data.length > 0 ? (
+						<div class="footer">
+							<NPagination
+								page={page.value}
+								itemCount={isProviderTDT ? TdtTotal.value : undefined}
+								pageSize={pageSize.value}
+								size="small"
+								pageSlot={5}
+								simple={!isProviderTDT}
+								pageCount={isProviderTDT ? undefined : 100}
+								onUpdatePage={value => (page.value = value)}
+								onUpdatePageSize={value => (pageSize.value = value)}
+							/>
+						</div>
+					) : (
+						<div class="empty">
+							<NEmpty size="small" />
+						</div>
+					)}
+				</>
+			),
+		},
+	]
+})
 
 const renderIcon: RenderIconImpl = option =>
 	generateIconElement({ order: option.index as number, type: 'error', size: 20 })
@@ -96,39 +179,40 @@ watch(dropdownVisible, value => !value && destroySearchResult())
 // #endregion
 
 // #region 绘制结果
-let searchResultDataSources: CustomDataSource
+let searchResultDataSources = new CustomDataSource('search-result')
 
 watchOnce(viewer, () => {
-	searchResultDataSources = new CustomDataSource('search-result')
 	viewer.value.dataSources.add(searchResultDataSources)
 })
 
-onBeforeUnmount(() => destroySearchResult())
+onBeforeUnmount(() => destroySearchResult(true))
 
-watch(data, value => {
-	searchResultDataSources.entities.removeAll()
-	value.forEach(({ data, index, key }) => {
-		const { lonlat } = data
-		const [longitude, latitude] = lonlat.split(',')
-		searchResultDataSources.entities.add({
-			id: key,
-			position: Cartesian3.fromDegrees(Number(longitude), Number(latitude)),
-			billboard: {
-				image: `data:image/svg+xml,${encodeURIComponent(generateIconStr({ order: index, type: 'error' }))}`,
-				height: 32,
-				width: 32,
-				horizontalOrigin: HorizontalOrigin.CENTER,
-				verticalOrigin: VerticalOrigin.BOTTOM,
-				heightReference: HeightReference.CLAMP_TO_GROUND,
-				disableDepthTestDistance: Number.POSITIVE_INFINITY,
-			},
+watch(
+	() => (isProviderTDT ? TdtData.value : AMapData.value),
+	value => {
+		searchResultDataSources.entities.removeAll()
+		value.forEach(({ index, key, longitude, latitude }) => {
+			searchResultDataSources.entities.add({
+				id: key,
+				position: Cartesian3.fromDegrees(longitude, latitude),
+				billboard: {
+					image: `data:image/svg+xml,${encodeURIComponent(generateIconStr({ order: index, type: 'error' }))}`,
+					height: 32,
+					width: 32,
+					horizontalOrigin: HorizontalOrigin.CENTER,
+					verticalOrigin: VerticalOrigin.BOTTOM,
+					heightReference: HeightReference.CLAMP_TO_GROUND,
+					disableDepthTestDistance: Number.POSITIVE_INFINITY,
+				},
+			})
 		})
-	})
-	flyToTarget(searchResultDataSources)
-})
+		flyToTarget(searchResultDataSources)
+	},
+)
 
-function destroySearchResult() {
+function destroySearchResult(destroy = false) {
 	searchResultDataSources.entities.removeAll()
+	if (!destroy) return
 	viewer.value.dataSources.remove(searchResultDataSources, true)
 	searchResultDataSources = null
 }
@@ -143,7 +227,7 @@ const handleDropdownSelect: OnUpdateValueImpl = key => {
 
 <template>
 	<div class="cesium-search">
-		<NButton quaternary circle :loading @click="send()">
+		<NButton quaternary circle :loading="isProviderTDT ? TdtLoading : AMapLoading" @click="search()">
 			<template #icon>
 				<Icon icon="tabler:search" />
 			</template>
@@ -165,7 +249,7 @@ const handleDropdownSelect: OnUpdateValueImpl = key => {
 				clearable
 				v-model:value="keyWord"
 				@clear="dropdownVisible = false"
-				@keydown.enter="send()"
+				@keydown.enter="search()"
 			/>
 		</NDropdown>
 	</div>

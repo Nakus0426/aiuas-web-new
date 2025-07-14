@@ -8,8 +8,7 @@ declare module '*.vue' {
 }
 
 interface ImportMetaEnv {
-	VITE_TDT_API_URL: string
-	VITE_TDT_TK: string
+	VITE_TDT_TOKEN: string
 	VITE_BASE_URL: string
 }
 

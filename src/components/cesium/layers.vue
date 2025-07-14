@@ -76,7 +76,7 @@ const restrictedFlightZoneOptions = [
 	},
 ]
 let restrictedFlightZoneData = []
-const restrictedFlightZoneDataSource = new CustomDataSource('restrictedFlightZone')
+let restrictedFlightZoneDataSource = new CustomDataSource('restrictedFlightZone')
 const restrictedFlightZones = ref<RestrictedFlightZoneEnum[]>([RestrictedFlightZoneEnum.Prohibition])
 
 async function initRestrictedFlightZone() {
@@ -137,6 +137,12 @@ const handleRestrictedFlightZonesUpdate: CheckboxGroupProps['onUpdate:value'] = 
 			.filter(item => item.properties.getValue().level === meta.value)
 			.forEach(item => restrictedFlightZoneDataSource.entities.remove(item))
 }
+
+onBeforeUnmount(() => {
+	restrictedFlightZoneDataSource.entities.removeAll()
+	viewer.value.dataSources.remove(restrictedFlightZoneDataSource)
+	restrictedFlightZoneDataSource = null
+})
 // #endregion
 </script>
 

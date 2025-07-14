@@ -3,7 +3,7 @@ import gcoord from 'gcoord'
 
 export const SUB_DOMAINS = ['1', '2', '3', '4']
 
-export const TOKEN = '01ae75aa73d3b73659da0f242ce77290'
+export const API_SERVICE_ALIAS = '/amap'
 
 export const IMG_SERVICE = `https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&style=6&ltype=0&scl=0&size=0`
 
