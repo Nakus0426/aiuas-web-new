@@ -185,7 +185,7 @@ function handleSceneClick() {
 	background-color: var(--card-color);
 	border-radius: 20px;
 	box-shadow: var(--box-shadow-1);
-	border: 1px solid var(--border-color);
+	border: none;
 	cursor: pointer;
 	transition: all 0.2s var(--cubic-bezier-ease-in-out);
 	font-size: 20px;
@@ -200,7 +200,6 @@ function handleSceneClick() {
 		height: 40px;
 		display: flex;
 		border-radius: 20px;
-		border: 1px solid var(--border-color);
 		color: var(--text-color-2);
 		box-shadow: var(--box-shadow-1);
 		overflow: hidden;

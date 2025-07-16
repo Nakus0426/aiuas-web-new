@@ -21,6 +21,7 @@ import {
 	type Cesium3DTileset,
 	type TimeDynamicPointCloud,
 	UrlTemplateImageryProvider,
+	ScreenSpaceEventType,
 } from 'cesium'
 import { isArray } from 'es-toolkit/compat'
 import { type ShallowRef } from 'vue'
@@ -38,11 +39,13 @@ import {
 	CIA_SERVICE as AMAP_CIA_SERVICE,
 	AmapMercatorTilingScheme,
 } from '@/configs/amap'
+import { nanoid } from 'nanoid'
 
 const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HTMLDivElement>) => {
 	const appStore = useAppStore()
 	const { get: getAppConfig } = useDict('dynamic_config_front_functions')
 	const { offlineMapEnable, terrainRelativePath, layerRelativePath } = appStore.setting
+	const id = nanoid()
 	const organizationId = 'JK7VYN'
 
 	// #region 初始化
@@ -71,6 +74,7 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 		viewer.value.resolutionScale = window.devicePixelRatio
 		Camera.DEFAULT_OFFSET = new HeadingPitchRange(0, CesiumMath.toRadians(defaultPitchDegree.value), 0)
 		initBaseLayer()
+		viewer.value.screenSpaceEventHandler.removeInputAction(ScreenSpaceEventType.LEFT_DOUBLE_CLICK)
 	}
 
 	onMounted(async () => {
@@ -200,11 +204,15 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 	}
 	// #endregion
 
+	const measureActived = ref(false)
+
 	return {
+		id,
 		viewer,
 		defaultPitchDegree,
 		isScene3D,
 		organizationId,
+		measureActived,
 		resetCamera,
 		flyToPosition,
 		flyToTarget,

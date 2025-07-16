@@ -200,7 +200,7 @@ onBeforeUnmount(() => {
 	background-color: var(--card-color);
 	border-radius: 20px;
 	box-shadow: var(--box-shadow-1);
-	border: 1px solid var(--border-color);
+	border: none;
 	cursor: pointer;
 	transition: all 0.2s var(--cubic-bezier-ease-in-out);
 	font-size: 20px;

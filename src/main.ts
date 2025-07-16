@@ -10,4 +10,4 @@ const app = createApp(App)
 
 setupStore(app)
 
-app.mount('#app', true)
+app.mount('#app')

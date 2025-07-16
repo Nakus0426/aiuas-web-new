@@ -6,18 +6,19 @@ import 'cesium/Build/Cesium/Widgets/widgets.css'
 import ContextMenu from './context-menu.vue'
 import Search from './search.vue'
 import Layers from './layers.vue'
+import Measure from './measure​.vue'
 
 const { footer = true } = defineProps<{ footer?: boolean }>()
 
 const containerRef = useTemplateRef('container')
 
-const { flyToPosition, flyToTarget } = useProvideHook(containerRef)
+const { id, flyToPosition, flyToTarget } = useProvideHook(containerRef)
 
 defineExpose({ flyToPosition, flyToTarget })
 </script>
 
 <template>
-	<div class="cesium">
+	<div class="cesium" :id>
 		<div class="cesium_container" ref="container" />
 		<Controls />
 		<Footer v-if="footer" />
@@ -25,6 +26,7 @@ defineExpose({ flyToPosition, flyToTarget })
 		<div class="cesium-toolbar">
 			<Search />
 			<Layers />
+			<Measure />
 		</div>
 	</div>
 </template>
@@ -50,6 +52,7 @@ defineExpose({ flyToPosition, flyToTarget })
 		left: 20px;
 		display: flex;
 		gap: 10px;
+		pointer-events: none;
 	}
 }
 </style>

@@ -196,7 +196,7 @@ watch(
 				id: key,
 				position: Cartesian3.fromDegrees(longitude, latitude),
 				billboard: {
-					image: `data:image/svg+xml,${encodeURIComponent(generateIconStr({ order: index, type: 'error' }))}`,
+					image: generateIconStr({ order: index, type: 'error' }),
 					height: 32,
 					width: 32,
 					horizontalOrigin: HorizontalOrigin.CENTER,
@@ -265,10 +265,10 @@ const handleDropdownSelect: OnUpdateValueImpl = key => {
 	padding: 5px;
 	background-color: var(--card-color);
 	border-radius: 20px;
-	border: 1px solid var(--border-color);
 	box-shadow: var(--box-shadow-1);
 	box-sizing: border-box;
 	transition: all 0.2s var(--cubic-bezier-ease-in-out);
+	pointer-events: all;
 
 	:deep(.n-input__input-el) {
 		height: 30px;
