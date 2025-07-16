@@ -627,9 +627,13 @@ export class CesiumDrawer {
 		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.MOUSE_MOVE, async ({ endPosition }) => {
 			const cartesian3 = getMousePosition(endPosition)
 			if (!cartesian3) return
-			if (drag.isDragging) updateDraggingNode(cartesian3)
-			else if (isDrawing) {
+			if (drag.isDragging) return updateDraggingNode(cartesian3)
+			const pick = this.viewer.scene.pick(endPosition)
+			const { type, index } = pick?.id?.properties?.getValue() ?? {}
+			if (isDrawing) {
 				if (fixedPositions.length === 0) return
+				if (type === EntityTypeEnum.Vertex && index === fixedPositions.length - 1)
+					return this.updateTooltip({ visible: true, text: '完成' })
 				previewPosition = cartesian3
 				const previewPositions = [...fixedPositions, previewPosition]
 				let previewDistance = 0
@@ -637,13 +641,10 @@ export class CesiumDrawer {
 					const _distance = await this.calculateGroundDistance(previewPositions[i], previewPositions[i + 1])
 					previewDistance += _distance
 				}
-				this.updateTooltip({ visible: true, text: this.formatDistance(previewDistance) })
-			} else {
-				const pick = this.viewer.scene.pick(endPosition)
-				const type = pick?.id?.properties?.getValue()?.type
-				type === EntityTypeEnum.Vertex ? showVertexTooltip(pick.id) : hideVertexTooltip()
-				this.updateTooltip({ visible: false })
+				return this.updateTooltip({ visible: true, text: this.formatDistance(previewDistance) })
 			}
+			type === EntityTypeEnum.Vertex ? showVertexTooltip(pick.id) : hideVertexTooltip()
+			this.updateTooltip({ visible: false })
 		})
 
 		// 鼠标松开
