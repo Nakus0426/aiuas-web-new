@@ -21,7 +21,9 @@ import { EventSubscriber } from './cesium-screen-space-event-subscriber'
 import { nanoid } from 'nanoid'
 import { useLocationIcon } from '@/hooks/use-dynamic-svg'
 import { isNotNil } from 'es-toolkit'
+import { NumberUtil } from './number-util'
 
+// #region 类型
 export const enum DrawMode {
 	Polyline,
 	Polygon,
@@ -76,6 +78,9 @@ export namespace EventHandler {
 		callback: Callback
 	}
 }
+// #endregion
+
+const DOUBLE_CLICK_THRESHOLD = 300
 
 export class CesiumDrawer {
 	private id: string
@@ -113,6 +118,7 @@ export class CesiumDrawer {
 		this.initMouseMoveEvent()
 		if (this.mode === DrawMode.Point) this.activeDrawer = this.initPointDrawer()
 		if (this.mode === DrawMode.Polyline) this.activeDrawer = this.initPolylineDrawer()
+		if (this.mode === DrawMode.Polygon) this.activeDrawer = this.initPolygonDrawer()
 	}
 
 	/**
@@ -163,6 +169,16 @@ export class CesiumDrawer {
 		const index = this.eventHandlers.findIndex(item => item.id === id)
 		if (index < 0) return
 		this.eventHandlers.splice(index, 1)
+	}
+
+	/**
+	 * 获取屏幕坐标位置
+	 * @param position 屏幕坐标
+	 */
+	private getMousePosition(position: Cartesian2) {
+		const ray = this.viewer.scene.camera.getPickRay(position)
+		if (!ray) return
+		return this.viewer.scene.globe.pick(ray, this.viewer.scene)
 	}
 
 	/**
@@ -311,15 +327,6 @@ export class CesiumDrawer {
 	}
 
 	/**
-	 * 格式化距离
-	 * @param distance 距离
-	 */
-	formatDistance(distance: number) {
-		const isKm = distance > 1000
-		return `${Math.round((distance / (isKm ? 1000 : 1)) * 100) / 100} ${isKm ? '公里' : '米'}`
-	}
-
-	/**
 	 * 初始化点绘制
 	 */
 	private initPointDrawer() {
@@ -374,7 +381,7 @@ export class CesiumDrawer {
 		let previewPosition: Cartesian3
 		let previewPolyline: Entity
 		let activePolyline: Entity
-		const history: Cartesian3[] = []
+		const history: Array<{ type: EntityTypeEnum; position: Cartesian3; index?: number }> = []
 		const drag = {
 			isDragging: false,
 			nodeIndex: -1,
@@ -392,13 +399,6 @@ export class CesiumDrawer {
 		})
 		this.viewer.canvas.style.cursor = 'crosshair'
 		this.updateTooltip({ text: '选择起点', visible: true })
-
-		// 获取鼠标坐标
-		const getMousePosition = (position: Cartesian2) => {
-			const ray = this.viewer.scene.camera.getPickRay(position)
-			if (!ray) return
-			return this.viewer.scene.globe.pick(ray, this.viewer.scene)
-		}
 
 		// 绘制折线
 		const createPolyline = () => {
@@ -507,36 +507,36 @@ export class CesiumDrawer {
 
 		// 撤销
 		const undo = () => {
-			if (history.length === 0 || fixedPositions.length === 0) return
-			history.pop()
-			fixedPositions.pop()
-			const vertexEntitiesLength = vertexEntities.entities.values.length
-			if (vertexEntitiesLength > 0)
-				vertexEntities.entities.remove(vertexEntities.entities.values[vertexEntitiesLength - 1])
-			if (distances.length > 0) distances.pop()
-			updateMidPoints()
+			if (fixedPositions.length <= 2) return
+			if (history.length === 0) return
+			const lastOp = history.pop()
+			if (lastOp.type === EntityTypeEnum.Vertex) fixedPositions.pop()
+			else if (lastOp.type === EntityTypeEnum.MidPoint && isNotNil(lastOp.index)) fixedPositions.splice(lastOp.index, 1)
+			vertexEntities.entities.removeAll()
+			for (let i = 0; i < fixedPositions.length; i++) createVertexEntity(i)
 			recalculateAllDistances()
-			this.undoAvailable.value = history.length > 0
+			updateMidPoints()
+			this.undoAvailable.value = history.length > 0 && fixedPositions.length > 1
 		}
 
 		// 添加节点
 		const addVertex = (position: Cartesian3) => {
 			fixedPositions.push(position)
-			history.push(position)
+			history.push({ type: EntityTypeEnum.Vertex, position })
 			createVertexEntity(fixedPositions.length - 1)
-			this.undoAvailable.value = true
+			this.undoAvailable.value = history.length > 0 && fixedPositions.length > 1
 		}
 
 		// 插入中间点
 		const insertMidPoint = (midPoint: Entity, position: Cartesian3) => {
 			const index = midPoint.properties.getValue().index
 			fixedPositions.splice(index + 1, 0, position)
-			history.push(position)
+			history.push({ type: EntityTypeEnum.MidPoint, position, index: index + 1 })
 			vertexEntities.entities.removeAll()
 			for (let i = 0; i < fixedPositions.length; i++) createVertexEntity(i)
 			recalculateAllDistances()
 			updateMidPoints()
-			this.undoAvailable.value = true
+			this.undoAvailable.value = history.length > 0 && fixedPositions.length > 1
 		}
 
 		// 显示节点tooltip
@@ -550,7 +550,7 @@ export class CesiumDrawer {
 			}
 			this.updateTempTooltip({
 				visible: true,
-				text: this.formatDistance(distanceToStart),
+				text: NumberUtil.formatDistance(distanceToStart),
 				position: { left: x + left, top: y + top },
 			})
 		}
@@ -592,12 +592,12 @@ export class CesiumDrawer {
 				item.point.outlineColor = new ConstantProperty(this.COLOR.Warning.withAlpha(0.5))
 			})
 			recalculateAllDistances()
-			this.undoAvailable.value = true
+			this.undoAvailable.value = history.length > 0 && fixedPositions.length > 1
 		}
 
 		// 左键单击
 		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.LEFT_CLICK, ({ position }) => {
-			const cartesian3 = getMousePosition(position)
+			const cartesian3 = this.getMousePosition(position)
 			if (!cartesian3) return
 			// 点击中间点
 			const pick = this.viewer.scene.pick(position)
@@ -625,7 +625,7 @@ export class CesiumDrawer {
 
 		// 鼠标移动
 		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.MOUSE_MOVE, async ({ endPosition }) => {
-			const cartesian3 = getMousePosition(endPosition)
+			const cartesian3 = this.getMousePosition(endPosition)
 			if (!cartesian3) return
 			if (drag.isDragging) return updateDraggingNode(cartesian3)
 			const pick = this.viewer.scene.pick(endPosition)
@@ -641,8 +641,9 @@ export class CesiumDrawer {
 					const _distance = await this.calculateGroundDistance(previewPositions[i], previewPositions[i + 1])
 					previewDistance += _distance
 				}
-				return this.updateTooltip({ visible: true, text: this.formatDistance(previewDistance) })
+				return this.updateTooltip({ visible: true, text: NumberUtil.formatDistance(previewDistance) })
 			}
+			if (type === EntityTypeEnum.MidPoint) return this.updateTooltip({ text: '点击添加顶点', visible: true })
 			type === EntityTypeEnum.Vertex ? showVertexTooltip(pick.id) : hideVertexTooltip()
 			this.updateTooltip({ visible: false })
 		})
@@ -677,6 +678,304 @@ export class CesiumDrawer {
 			midPoints = null
 			if (activePolyline) this.viewer.entities.remove(activePolyline)
 			if (previewPolyline) this.viewer.entities.remove(previewPolyline)
+		}
+
+		return { destroy, undo }
+	}
+
+	/**
+	 * 初始化多边形绘制
+	 */
+	private initPolygonDrawer() {
+		let lastClickTime = 0
+		let isDrawing = true
+		const fixedPositions: Cartesian3[] = []
+		let vertexEntities = new CustomDataSource('vertexEntities')
+		this.viewer.dataSources.add(vertexEntities)
+		let midPoints = new CustomDataSource('midPoints')
+		this.viewer.dataSources.add(midPoints)
+		let previewPosition: Cartesian3
+		let activePolygon: Entity
+		const history: Array<{ type: EntityTypeEnum; position: Cartesian3; index?: number }> = []
+		const drag = {
+			isDragging: false,
+			nodeIndex: -1,
+			startPosition: null,
+		}
+		const enum EntityTypeEnum {
+			Vertex,
+			MidPoint,
+		}
+
+		this.viewer.camera.flyTo({
+			destination: this.viewer.camera.position,
+			duration: 0.2,
+			orientation: new HeadingPitchRange(this.viewer.camera.heading, CesiumMath.toRadians(-90), 0),
+		})
+		this.viewer.canvas.style.cursor = 'crosshair'
+		this.updateTooltip({ text: '选择起点', visible: true })
+
+		// 创建多边形实体
+		const createPolygon = () => {
+			activePolygon = this.viewer.entities.add({
+				polygon: {
+					hierarchy: new CallbackProperty(() => {
+						const positions = isDrawing && previewPosition ? [...fixedPositions, previewPosition] : fixedPositions
+						return { positions, perPositionHeight: true }
+					}, false),
+					material: Color.WHITE.withAlpha(0.5),
+					outline: true,
+					outlineColor: this.COLOR.Warning,
+					outlineWidth: 4,
+					heightReference: HeightReference.CLAMP_TO_GROUND,
+				},
+				polyline: {
+					positions: new CallbackProperty(() => {
+						if (fixedPositions.length === 0) return []
+						if (previewPosition) return [...fixedPositions, previewPosition, fixedPositions[0]]
+						return [...fixedPositions, fixedPositions[0]]
+					}, false),
+					width: 4,
+					material: this.COLOR.Warning,
+					clampToGround: true,
+				},
+			})
+		}
+		createPolygon()
+
+		// 创建顶点
+		const createVertexEntity = (index: number) => {
+			return vertexEntities.entities.add({
+				position: new CallbackPositionProperty(
+					() => (index < fixedPositions.length ? fixedPositions[index] : null),
+					false,
+				),
+				point: {
+					pixelSize: 14,
+					color: Color.WHITE,
+					outlineColor: this.COLOR.Warning.withAlpha(0.5),
+					outlineWidth: 2,
+					heightReference: HeightReference.CLAMP_TO_GROUND,
+					disableDepthTestDistance: Number.POSITIVE_INFINITY,
+				},
+				properties: { type: EntityTypeEnum.Vertex, index },
+			})
+		}
+
+		// 创建中间点
+		const createMidPointEntity = (index: number, nextIndex: number) => {
+			return midPoints.entities.add({
+				position: new CallbackPositionProperty(() => {
+					if (index >= fixedPositions.length || nextIndex >= fixedPositions.length) return null
+					return Cartesian3.midpoint(fixedPositions[index], fixedPositions[nextIndex], new Cartesian3())
+				}, false),
+				point: {
+					pixelSize: 8,
+					color: Color.WHITE,
+					outlineColor: this.COLOR.Warning.withAlpha(0.5),
+					outlineWidth: 2,
+					heightReference: HeightReference.CLAMP_TO_GROUND,
+					disableDepthTestDistance: Number.POSITIVE_INFINITY,
+				},
+				properties: {
+					type: EntityTypeEnum.MidPoint,
+					index,
+					nextIndex,
+				},
+			})
+		}
+
+		// 更新中间点
+		const updateMidPoints = () => {
+			midPoints.entities.removeAll()
+			if (fixedPositions.length < 2) return
+			const edgeCount = isDrawing ? fixedPositions.length - 1 : fixedPositions.length
+			for (let i = 0; i < edgeCount; i++) createMidPointEntity(i, (i + 1) % fixedPositions.length)
+		}
+
+		// 计算多边形面积（考虑地形）
+		const calculatePolygonArea = async (positions: Cartesian3[]) => {
+			if (positions.length < 3) return 0
+			const cartographicList = positions.map(pos => Cartographic.fromCartesian(pos))
+			const updatedCartographicList = await sampleTerrainMostDetailed(this.viewer.terrainProvider, cartographicList)
+			const terrainPositions = updatedCartographicList.map(cart =>
+				Cartesian3.fromRadians(cart.longitude, cart.latitude, cart.height),
+			)
+			const ring = [...terrainPositions, terrainPositions[0]]
+			let area = 0
+			for (let i = 0; i < ring.length - 1; i++) {
+				const p1 = ring[i]
+				const p2 = ring[i + 1]
+				area += p1.x * p2.y - p2.x * p1.y
+			}
+			return Math.abs(area) / 2
+		}
+
+		// 抛出多边形事件
+		const emitPolygonEvent = async () => {
+			const positions = isDrawing && previewPosition ? [...fixedPositions, previewPosition] : fixedPositions
+			const area = await calculatePolygonArea(positions)
+			this.eventHandlers.forEach(({ event, callback }) => {
+				if (event === Event.Polygon)
+					(callback as EventHandler.PolygonEventCallback)({
+						entity: activePolygon,
+						positions,
+						area,
+					})
+			})
+		}
+
+		// 添加顶点
+		const addVertex = (position: Cartesian3) => {
+			fixedPositions.push(position)
+			history.push({
+				type: EntityTypeEnum.Vertex,
+				position,
+			})
+			createVertexEntity(fixedPositions.length - 1)
+			updateMidPoints()
+			emitPolygonEvent()
+			this.undoAvailable.value = history.length > 0 && fixedPositions.length > 3
+		}
+
+		// 插入中间点
+		const insertMidPoint = async (midPoint: Entity, position: Cartesian3) => {
+			const { nextIndex } = midPoint.properties.getValue()
+			fixedPositions.splice(nextIndex, 0, position)
+			history.push({ type: EntityTypeEnum.MidPoint, position, index: nextIndex })
+			vertexEntities.entities.removeAll()
+			for (let i = 0; i < fixedPositions.length; i++) createVertexEntity(i)
+			updateMidPoints()
+			emitPolygonEvent()
+			this.undoAvailable.value = history.length > 0 && fixedPositions.length > 3
+		}
+
+		// 撤销操作
+		const undo = () => {
+			if (history.length === 0) return
+			const lastOp = history.pop()
+			if (lastOp.type === EntityTypeEnum.Vertex) fixedPositions.pop()
+			else if (lastOp.type === EntityTypeEnum.MidPoint && isNotNil(lastOp.index)) fixedPositions.splice(lastOp.index, 1)
+			vertexEntities.entities.removeAll()
+			for (let i = 0; i < fixedPositions.length; i++) createVertexEntity(i)
+			updateMidPoints()
+			emitPolygonEvent()
+			this.undoAvailable.value = history.length > 0 && fixedPositions.length > 3
+		}
+
+		// 开始拖动节点
+		const startDraggingNode = (entity: Entity) => {
+			this.updateTempTooltip({ visible: false })
+			this.viewer.scene.screenSpaceCameraController.enableInputs = false
+			drag.isDragging = true
+			drag.nodeIndex = entity.properties.getValue().index
+			drag.startPosition = entity.position.getValue()
+			entity.point.color = new ConstantProperty(this.COLOR.Warning)
+			entity.point.outlineColor = new ConstantProperty(Color.WHITE.withAlpha(0.5))
+			this.undoAvailable.value = false
+		}
+
+		// 更新拖动节点
+		const updateDraggingNode = (position: Cartesian3) => {
+			if (!drag.isDragging || drag.nodeIndex < 0 || drag.nodeIndex >= fixedPositions.length) return
+			fixedPositions[drag.nodeIndex] = position
+		}
+
+		// 停止拖动节点
+		const stopDraggingNode = () => {
+			if (!drag.isDragging) return
+			this.viewer.scene.screenSpaceCameraController.enableInputs = true
+			drag.isDragging = false
+			drag.nodeIndex = -1
+			drag.startPosition = null
+			vertexEntities.entities.values.forEach(item => {
+				item.point.color = new ConstantProperty(Color.WHITE)
+				item.point.outlineColor = new ConstantProperty(this.COLOR.Warning.withAlpha(0.5))
+			})
+			this.undoAvailable.value = history.length > 0 && fixedPositions.length > 3
+			emitPolygonEvent()
+		}
+
+		// 完成绘制
+		const finishDrawing = () => {
+			if (!isDrawing || fixedPositions.length < 3) return
+			isDrawing = false
+			previewPosition = null
+			this.updateTooltip({ visible: false })
+			updateMidPoints()
+			emitPolygonEvent()
+		}
+
+		// 左键点击事件
+		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.LEFT_CLICK, ({ position }) => {
+			const now = Date.now()
+			const isDoubleClick = now - lastClickTime < DOUBLE_CLICK_THRESHOLD
+			lastClickTime = now
+			// 如果是双击，不执行单击逻辑
+			if (isDoubleClick) return
+			const cartesian3 = this.getMousePosition(position)
+			if (!cartesian3) return
+			// 检查是否点击中间点
+			const pick = this.viewer.scene.pick(position)
+			const { type, index } = pick?.id?.properties?.getValue() ?? {}
+			if (type === EntityTypeEnum.MidPoint) return insertMidPoint(pick.id, cartesian3)
+			// 检查是否点击第一个顶点完成绘制
+			if (type === EntityTypeEnum.Vertex && index === 0 && fixedPositions.length >= 3) return finishDrawing()
+			// 添加新顶点
+			if (isDrawing) {
+				addVertex(cartesian3)
+			}
+		})
+
+		// 鼠标移动事件
+		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.MOUSE_MOVE, ({ endPosition }) => {
+			const cartesian3 = this.getMousePosition(endPosition)
+			if (!cartesian3) return
+			// 处理拖动
+			if (drag.isDragging) return updateDraggingNode(cartesian3)
+			// 更新预览位置
+			if (isDrawing && fixedPositions.length > 0) previewPosition = cartesian3
+			// 显示提示信息
+			const pick = this.viewer.scene.pick(endPosition)
+			const { type } = pick?.id?.properties?.getValue() ?? {}
+			if (type === EntityTypeEnum.MidPoint) return this.updateTooltip({ text: '点击添加顶点', visible: true })
+			if (isDrawing) {
+				if (fixedPositions.length === 0) return this.updateTooltip({ text: '选择起点', visible: true })
+				if (fixedPositions.length < 2) return this.updateTooltip({ text: '添加顶点', visible: true })
+				if (fixedPositions.length >= 2) return this.updateTooltip({ text: '添加顶点 | 双击完成', visible: true })
+			}
+			this.updateTooltip({ visible: false })
+		})
+
+		// 鼠标按下事件
+		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.LEFT_DOWN, ({ position }) => {
+			const pick = this.viewer.scene.pick(position)
+			const { type } = pick?.id?.properties?.getValue() ?? {}
+			if (type === EntityTypeEnum.Vertex) startDraggingNode(pick.id)
+		})
+
+		// 鼠标松开事件
+		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.LEFT_UP, () => {
+			if (drag.isDragging) stopDraggingNode()
+		})
+
+		// 双击完成绘制
+		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.LEFT_DOUBLE_CLICK, () => {
+			if (fixedPositions.length < 3) return
+			finishDrawing()
+			lastClickTime = 0
+		})
+
+		// 销毁
+		const destroy = () => {
+			fixedPositions.length = 0
+			previewPosition = null
+			isDrawing = false
+			this.viewer.dataSources.remove(vertexEntities, true)
+			vertexEntities = null
+			this.viewer.dataSources.remove(midPoints, true)
+			midPoints = null
+			if (activePolygon) this.viewer.entities.remove(activePolygon)
 		}
 
 		return { destroy, undo }

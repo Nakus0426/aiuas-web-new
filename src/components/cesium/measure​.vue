@@ -2,6 +2,7 @@
 import { CesiumDrawer, DrawMode, Event, type EventHandler } from '@/commons/cesium-drawer'
 import { useHook } from './hook'
 import { AnimatePresence, Motion } from 'motion-v'
+import { NumberUtil } from '@/commons/number-util'
 
 const { id, measureActived, viewer } = useHook()
 
@@ -22,7 +23,7 @@ let callbackId: string
 function init() {
 	measureActived.value = true
 	drawer.activate()
-	callbackId = drawer.on(isDistance.value ? Event.Polyline : Event.Point, handleDrawUpdate)
+	callbackId = drawer.on(isDistance.value ? Event.Polyline : Event.Polygon, handleDrawUpdate)
 }
 
 function exit() {
@@ -31,7 +32,7 @@ function exit() {
 	drawer.deactivate()
 }
 
-function handleModeUpdate(value: Mode) {
+function handleModeUpdate() {
 	drawer.deactivate()
 	drawer = new CesiumDrawer(id, viewer.value, isDistance.value ? DrawMode.Polyline : DrawMode.Polygon)
 	init()
@@ -41,19 +42,24 @@ watch(measureActived, value => (value ? init() : exit()))
 // #endregion
 
 const distanceDefault = '- 米'
+const areaDefault = '- 平方米'
 const distance = ref(distanceDefault)
+const area = ref(areaDefault)
 
 function handleDrawUpdate({
 	entity,
 	distance: _distance,
-	area,
+	area: _area,
 }: EventHandler.PolylineEvent & EventHandler.PolygonEvent) {
-	if (isDistance.value) distance.value = drawer.formatDistance(_distance)
+	console.log(entity, _area)
+	if (isDistance.value) distance.value = NumberUtil.formatDistance(_distance)
+	else area.value = NumberUtil.formatDistance(_area)
 }
 
 function handleResetClick() {
 	drawer.reset()
 	distance.value = distanceDefault
+	area.value = areaDefault
 }
 
 function handleUndoClick() {
@@ -144,7 +150,7 @@ function handleUndoClick() {
 							<span class="tip">在地图上点击多个点，测量面积</span>
 							<div>
 								<span>面积：</span>
-								<span>{{}}</span>
+								<span>{{ area }}</span>
 							</div>
 						</NTabPane>
 					</NTabs>
