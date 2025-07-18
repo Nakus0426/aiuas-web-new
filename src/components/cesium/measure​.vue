@@ -45,21 +45,26 @@ const distanceDefault = '- 米'
 const areaDefault = '- 平方米'
 const distance = ref(distanceDefault)
 const area = ref(areaDefault)
+const perimeter = ref(distanceDefault)
 
 function handleDrawUpdate({
 	entity,
 	distance: _distance,
 	area: _area,
+	perimeter: _perimeter,
 }: EventHandler.PolylineEvent & EventHandler.PolygonEvent) {
 	if (isDistance.value) distance.value = NumberUtil.formatDistance(_distance)
-	else area.value = NumberUtil.formatArea(_area)
-	console.log(_area)
+	else {
+		area.value = NumberUtil.formatArea(_area)
+		perimeter.value = NumberUtil.formatDistance(_perimeter)
+	}
 }
 
 function handleResetClick() {
 	drawer.reset()
 	distance.value = distanceDefault
 	area.value = areaDefault
+	perimeter.value = distanceDefault
 }
 
 function handleUndoClick() {
@@ -151,6 +156,10 @@ function handleUndoClick() {
 							<div>
 								<span>面积：</span>
 								<span>{{ area }}</span>
+							</div>
+							<div>
+								<span>周长：</span>
+								<span>{{ perimeter }}</span>
 							</div>
 						</NTabPane>
 					</NTabs>

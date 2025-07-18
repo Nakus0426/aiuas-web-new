@@ -9,8 +9,6 @@ import {
 	ScreenSpaceEventType,
 	VerticalOrigin,
 	Math as CesiumMath,
-	sampleTerrainMostDetailed,
-	Cartographic,
 	Color,
 	CallbackProperty,
 	CallbackPositionProperty,
@@ -62,6 +60,7 @@ export namespace EventHandler {
 		entity: Entity
 		positions: Cartesian3[]
 		area: number
+		perimeter: number
 	}
 
 	export interface EllipseEvent {
@@ -69,6 +68,7 @@ export namespace EventHandler {
 		position: Cartesian3
 		radius: number
 		area: number
+		perimeter: number
 	}
 
 	export type MouseMoveEventCallback = (event: MouseMoveEvent) => void
@@ -807,13 +807,17 @@ export class CesiumDrawer {
 		// 抛出多边形事件
 		const emitPolygonEvent = async () => {
 			const positions = isDrawing && previewPosition ? [...fixedPositions, previewPosition] : fixedPositions
-			const area = await this.util.groundArea(positions)
+			const [area, perimeter] = await Promise.all([
+				this.util.groundPolygonArea(positions),
+				this.util.groundDistance(positions),
+			])
 			this.eventHandlers.forEach(({ event, callback }) => {
 				if (event === Event.Polygon)
 					(callback as EventHandler.PolygonEventCallback)({
 						entity: activePolygon,
 						positions,
 						area,
+						perimeter,
 					})
 			})
 		}
@@ -1044,16 +1048,22 @@ export class CesiumDrawer {
 		}
 
 		// 抛出事件
-		const emitEvent = () => {
+		const emitEvent = async () => {
 			if (!ellipseEntity || !centerPosition.getValue()) return
+			const position = centerPosition.getValue()
 			const radius = radiusProperty.getValue()
+			const [area, perimeter] = await Promise.all([
+				this.util.groundEllipseArea(position, radius),
+				this.util.groundEllipsePerimeter(position, radius),
+			])
 			this.eventHandlers.forEach(({ event, callback }) => {
 				if (event === Event.Ellipse)
 					(callback as EventHandler.EllipseEventCallback)({
 						entity: ellipseEntity!,
-						position: centerPosition.getValue()!,
+						position,
 						radius,
-						area: 0,
+						area,
+						perimeter,
 					})
 			})
 		}
