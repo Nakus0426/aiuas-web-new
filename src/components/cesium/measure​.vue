@@ -51,9 +51,9 @@ function handleDrawUpdate({
 	distance: _distance,
 	area: _area,
 }: EventHandler.PolylineEvent & EventHandler.PolygonEvent) {
-	console.log(entity, _area)
 	if (isDistance.value) distance.value = NumberUtil.formatDistance(_distance)
-	else area.value = NumberUtil.formatDistance(_area)
+	else area.value = NumberUtil.formatArea(_area)
+	console.log(_area)
 }
 
 function handleResetClick() {

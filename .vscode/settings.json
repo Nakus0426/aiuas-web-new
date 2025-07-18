@@ -8,5 +8,7 @@
     "isleaf",
     "lonlat",
     "unproject"
-  ]
+  ],
+  "oxc.enable": true,
+  "arrayIndexInlay.enabled": true
 }

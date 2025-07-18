@@ -3,10 +3,10 @@ import { useHook } from '@/components/cesium/hook'
 import { EventSubscriber } from '@/commons/cesium-screen-space-event-subscriber'
 import {
 	Cartesian2,
-	Cartesian3,
 	Cartographic,
 	Math as CesiumMath,
-	Ray,
+	defined,
+	EllipsoidGeodesic,
 	sampleTerrainMostDetailed,
 	ScreenSpaceEventType,
 } from 'cesium'
@@ -76,30 +76,38 @@ function initScale() {
 }
 
 function updateScale() {
-	const center = new Cartesian2(viewer.value.scene.canvas.width / 2, viewer.value.scene.canvas.height / 2)
-	const startPosition = viewer.value.scene.globe.pick(viewer.value.camera.getPickRay(center), viewer.value.scene)
-	if (!startPosition) return
-	const endPosition = viewer.value.scene.camera.pickEllipsoid(
-		new Cartesian2(center.x + 100, center.y),
-		viewer.value.scene.globe.ellipsoid,
-	)
-	if (!endPosition) return
-	const distance = Cartesian3.distance(startPosition, endPosition)
-	const standardValue = findStandardValue(distance)
-	scale.value = {
-		width: `${Math.round((100 * standardValue) / distance)}px`,
-		unit: standardValue >= 1000 ? 'km' : 'm',
-		value: standardValue >= 1000 ? standardValue / 1000 : standardValue,
-	}
-}
+	const geodesic = new EllipsoidGeodesic()
+	const width = viewer.value.scene.canvas.clientWidth
+	const height = viewer.value.scene.canvas.clientHeight
+	const left = viewer.value.scene.camera.getPickRay(new Cartesian2((width / 2) | 0, height - 1))
+	const right = viewer.value.scene.camera.getPickRay(new Cartesian2((1 + width / 2) | 0, height - 1))
+	const leftPosition = viewer.value.scene.globe.pick(left, viewer.value.scene)
+	const rightPosition = viewer.value.scene.globe.pick(right, viewer.value.scene)
 
-function findStandardValue(value: number) {
-	if (value < SCALE_VALUE_LIST[0]) return SCALE_VALUE_LIST[0]
-	const length = SCALE_VALUE_LIST.length
-	for (let i = 0; i < length; i++) {
-		if (value < SCALE_VALUE_LIST[i]) return SCALE_VALUE_LIST[i - 1]
+	if (!defined(leftPosition) || !defined(rightPosition)) {
+		scale.value = { width: '0px', unit: '', value: 0 }
+		return
 	}
-	return SCALE_VALUE_LIST[length - 1]
+
+	const leftCartographic = viewer.value.scene.globe.ellipsoid.cartesianToCartographic(leftPosition)
+	const rightCartographic = viewer.value.scene.globe.ellipsoid.cartesianToCartographic(rightPosition)
+	geodesic.setEndPoints(leftCartographic, rightCartographic)
+	const pixelDistance = geodesic.surfaceDistance
+
+	let distance: number
+	for (let i = SCALE_VALUE_LIST.length - 1; !defined(distance) && i >= 0; --i)
+		if (SCALE_VALUE_LIST[i] / pixelDistance < 100) distance = SCALE_VALUE_LIST[i]
+
+	if (defined(distance)) {
+		const isKm = distance >= 1000
+		scale.value = {
+			width: `${(distance / pixelDistance) | 0}px`,
+			unit: isKm ? ' km' : ' m',
+			value: isKm ? distance / 1000 : distance,
+		}
+		return
+	}
+	scale.value = { width: '0px', unit: '', value: 0 }
 }
 // #endregion
 </script>

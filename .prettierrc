@@ -8,8 +8,5 @@
   "brackSameLine": true,
   "vueIndentScriptAndStyle": false,
   "arrowParens": "avoid",
-  "printWidth": 120,
-  "plugins": [
-    "@prettier/plugin-oxc"
-  ]
+  "printWidth": 120
 }

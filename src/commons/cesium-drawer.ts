@@ -1,13 +1,13 @@
 import {
+	type Entity,
+	type Viewer,
 	Cartesian2,
 	Cartesian3,
-	Entity,
 	HeadingPitchRange,
 	HeightReference,
 	HorizontalOrigin,
 	ScreenSpaceEventType,
 	VerticalOrigin,
-	Viewer,
 	Math as CesiumMath,
 	sampleTerrainMostDetailed,
 	Cartographic,
@@ -22,6 +22,7 @@ import { nanoid } from 'nanoid'
 import { useLocationIcon } from '@/hooks/use-dynamic-svg'
 import { isNotNil } from 'es-toolkit'
 import { NumberUtil } from './number-util'
+import { CesiumUtil } from './cesium-util'
 
 // #region 类型
 export const enum DrawMode {
@@ -36,6 +37,7 @@ export const enum Event {
 	Point,
 	Polyline,
 	Polygon,
+	Ellipse,
 }
 
 export namespace EventHandler {
@@ -62,6 +64,13 @@ export namespace EventHandler {
 		area: number
 	}
 
+	export interface EllipseEvent {
+		entity: Entity
+		position: Cartesian3
+		radius: number
+		area: number
+	}
+
 	export type MouseMoveEventCallback = (event: MouseMoveEvent) => void
 
 	export type PointEventCallback = (event: PointEvent) => void
@@ -70,7 +79,14 @@ export namespace EventHandler {
 
 	export type PolygonEventCallback = (event: PolygonEvent) => void
 
-	export type Callback = MouseMoveEventCallback | PointEventCallback | PolylineEventCallback | PolygonEventCallback
+	export type EllipseEventCallback = (event: EllipseEvent) => void
+
+	export type Callback =
+		| MouseMoveEventCallback
+		| PointEventCallback
+		| PolylineEventCallback
+		| PolygonEventCallback
+		| EllipseEventCallback
 
 	export interface Handler {
 		id: string
@@ -92,6 +108,7 @@ export class CesiumDrawer {
 	private tempTooltip: HTMLDivElement
 	private isTooltipUpdating = false
 	private activeDrawer: { destroy: Function; undo?: Function }
+	private util: CesiumUtil
 	private COLOR = {
 		Primary: Color.fromCssColorString('#783178'),
 		Default: Color.fromCssColorString('#333639'),
@@ -106,6 +123,7 @@ export class CesiumDrawer {
 		this.id = id
 		this.viewer = viewer
 		this.mode = mode
+		this.util = new CesiumUtil(viewer)
 	}
 
 	/**
@@ -119,6 +137,7 @@ export class CesiumDrawer {
 		if (this.mode === DrawMode.Point) this.activeDrawer = this.initPointDrawer()
 		if (this.mode === DrawMode.Polyline) this.activeDrawer = this.initPolylineDrawer()
 		if (this.mode === DrawMode.Polygon) this.activeDrawer = this.initPolygonDrawer()
+		if (this.mode === DrawMode.Ellipse) this.activeDrawer = this.initEllipseDrawer()
 	}
 
 	/**
@@ -312,18 +331,14 @@ export class CesiumDrawer {
 	}
 
 	/**
-	 * 计算两点的地表距离
-	 * @param start 起点坐标
-	 * @param end 终点坐标
-	 * @returns 距离
+	 * 重置相机视角
 	 */
-	private async calculateGroundDistance(start: Cartesian3, end: Cartesian3) {
-		const cartographicList = await sampleTerrainMostDetailed(this.viewer.terrainProvider, [
-			Cartographic.fromCartesian(start),
-			Cartographic.fromCartesian(end),
-		])
-		const points = cartographicList.map(cart => Cartesian3.fromRadians(cart.longitude, cart.latitude, cart.height))
-		return Cartesian3.distance(points[0], points[1])
+	private resetCamera() {
+		this.viewer.camera.flyTo({
+			destination: this.viewer.camera.position,
+			duration: 0.2,
+			orientation: new HeadingPitchRange(this.viewer.camera.heading, CesiumMath.toRadians(-90), 0),
+		})
 	}
 
 	/**
@@ -392,11 +407,7 @@ export class CesiumDrawer {
 			MidPoint,
 		}
 
-		this.viewer.camera.flyTo({
-			destination: this.viewer.camera.position,
-			duration: 0.2,
-			orientation: new HeadingPitchRange(this.viewer.camera.heading, CesiumMath.toRadians(-90), 0),
-		})
+		this.resetCamera()
 		this.viewer.canvas.style.cursor = 'crosshair'
 		this.updateTooltip({ text: '选择起点', visible: true })
 
@@ -499,7 +510,7 @@ export class CesiumDrawer {
 		const recalculateAllDistances = async () => {
 			distances.length = 0
 			for (let i = 0, len = fixedPositions.length - 1; i < len; i++) {
-				const distance = await this.calculateGroundDistance(fixedPositions[i], fixedPositions[i + 1])
+				const distance = await this.util.groundDistance([fixedPositions[i], fixedPositions[i + 1]])
 				distances.push(distance)
 			}
 			emitEvent()
@@ -638,7 +649,7 @@ export class CesiumDrawer {
 				const previewPositions = [...fixedPositions, previewPosition]
 				let previewDistance = 0
 				for (let i = 0, len = previewPositions.length - 1; i < len; i++) {
-					const _distance = await this.calculateGroundDistance(previewPositions[i], previewPositions[i + 1])
+					const _distance = await this.util.groundDistance([previewPositions[i], previewPositions[i + 1]])
 					previewDistance += _distance
 				}
 				return this.updateTooltip({ visible: true, text: NumberUtil.formatDistance(previewDistance) })
@@ -669,15 +680,19 @@ export class CesiumDrawer {
 		// 销毁
 		const destroy = () => {
 			fixedPositions.length = 0
-			previewPosition = null
 			distances.length = null
-			isDrawing = false
 			this.viewer.dataSources.remove(vertexEntities, true)
 			vertexEntities = null
-			this.viewer.dataSources.remove(midPoints)
+			this.viewer.dataSources.remove(midPoints, true)
 			midPoints = null
-			if (activePolyline) this.viewer.entities.remove(activePolyline)
-			if (previewPolyline) this.viewer.entities.remove(previewPolyline)
+			if (activePolyline) {
+				this.viewer.entities.remove(activePolyline)
+				activePolyline = null
+			}
+			if (previewPolyline) {
+				this.viewer.entities.remove(previewPolyline)
+				previewPolyline = null
+			}
 		}
 
 		return { destroy, undo }
@@ -707,11 +722,7 @@ export class CesiumDrawer {
 			MidPoint,
 		}
 
-		this.viewer.camera.flyTo({
-			destination: this.viewer.camera.position,
-			duration: 0.2,
-			orientation: new HeadingPitchRange(this.viewer.camera.heading, CesiumMath.toRadians(-90), 0),
-		})
+		this.resetCamera()
 		this.viewer.canvas.style.cursor = 'crosshair'
 		this.updateTooltip({ text: '选择起点', visible: true })
 
@@ -793,28 +804,10 @@ export class CesiumDrawer {
 			for (let i = 0; i < edgeCount; i++) createMidPointEntity(i, (i + 1) % fixedPositions.length)
 		}
 
-		// 计算多边形面积（考虑地形）
-		const calculatePolygonArea = async (positions: Cartesian3[]) => {
-			if (positions.length < 3) return 0
-			const cartographicList = positions.map(pos => Cartographic.fromCartesian(pos))
-			const updatedCartographicList = await sampleTerrainMostDetailed(this.viewer.terrainProvider, cartographicList)
-			const terrainPositions = updatedCartographicList.map(cart =>
-				Cartesian3.fromRadians(cart.longitude, cart.latitude, cart.height),
-			)
-			const ring = [...terrainPositions, terrainPositions[0]]
-			let area = 0
-			for (let i = 0; i < ring.length - 1; i++) {
-				const p1 = ring[i]
-				const p2 = ring[i + 1]
-				area += p1.x * p2.y - p2.x * p1.y
-			}
-			return Math.abs(area) / 2
-		}
-
 		// 抛出多边形事件
 		const emitPolygonEvent = async () => {
 			const positions = isDrawing && previewPosition ? [...fixedPositions, previewPosition] : fixedPositions
-			const area = await calculatePolygonArea(positions)
+			const area = await this.util.groundArea(positions)
 			this.eventHandlers.forEach(({ event, callback }) => {
 				if (event === Event.Polygon)
 					(callback as EventHandler.PolygonEventCallback)({
@@ -959,7 +952,7 @@ export class CesiumDrawer {
 			if (drag.isDragging) stopDraggingNode()
 		})
 
-		// 双击完成绘制
+		// 双击事件
 		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.LEFT_DOUBLE_CLICK, () => {
 			if (fixedPositions.length < 3) return
 			finishDrawing()
@@ -975,9 +968,198 @@ export class CesiumDrawer {
 			vertexEntities = null
 			this.viewer.dataSources.remove(midPoints, true)
 			midPoints = null
-			if (activePolygon) this.viewer.entities.remove(activePolygon)
+			if (activePolygon) {
+				this.viewer.entities.remove(activePolygon)
+				activePolygon = null
+			}
 		}
 
 		return { destroy, undo }
+	}
+
+	/**
+	 * 初始化圆形绘制
+	 */
+	private initEllipseDrawer() {
+		let centerPoint: Entity | null = null
+		let endPoint: Entity | null = null
+		let ellipseEntity: Entity | null = null
+		let isDrawing = true
+		let isDragging = false
+		let lastRadius = 0
+		let currentMousePosition = new Cartesian2()
+		const { left, top } = this.viewer.canvas.getBoundingClientRect()
+
+		this.resetCamera()
+		this.viewer.canvas.style.cursor = 'crosshair'
+		this.updateTooltip({ text: '选择圆心', visible: true })
+		this.undoAvailable.value = false
+
+		// 动态属性
+		const centerPosition = new CallbackPositionProperty(() => centerPoint?.position?.getValue() ?? null, false)
+		const endPosition = new CallbackPositionProperty(() => endPoint?.position?.getValue() ?? null, false)
+		const previewPosition = new CallbackPositionProperty(() => {
+			if (isDragging) return endPosition.getValue()
+			if (isDrawing && centerPosition.getValue()) {
+				const ray = this.viewer.scene.camera.getPickRay(currentMousePosition)
+				return ray ? this.viewer.scene.globe.pick(ray, this.viewer.scene) : null
+			}
+			return null
+		}, false)
+		const radiusProperty = new CallbackProperty(() => {
+			const center = centerPosition.getValue()
+			const end = previewPosition.getValue()
+			if (!center || !end) return 0
+			return Cartesian3.distance(center, end)
+		}, false)
+		const linePositions = new CallbackProperty(() => {
+			const center = centerPosition.getValue()
+			const end = previewPosition.getValue()
+			if (!center || !end) return []
+			return [center, end]
+		}, false)
+
+		// 创建/更新圆形实体
+		const updateEllipseEntity = () => {
+			if (!ellipseEntity) {
+				ellipseEntity = this.viewer.entities.add({
+					position: centerPosition,
+					ellipse: {
+						semiMajorAxis: radiusProperty,
+						semiMinorAxis: radiusProperty,
+						material: Color.WHITE.withAlpha(0.5),
+						outline: true,
+						outlineColor: this.COLOR.Warning,
+						heightReference: HeightReference.CLAMP_TO_GROUND,
+					},
+					polyline: {
+						positions: linePositions,
+						width: 2,
+						material: this.COLOR.Warning,
+						clampToGround: true,
+					},
+				})
+			}
+			lastRadius = radiusProperty.getValue()
+		}
+
+		// 抛出事件
+		const emitEvent = () => {
+			if (!ellipseEntity || !centerPosition.getValue()) return
+			const radius = radiusProperty.getValue()
+			this.eventHandlers.forEach(({ event, callback }) => {
+				if (event === Event.Ellipse)
+					(callback as EventHandler.EllipseEventCallback)({
+						entity: ellipseEntity!,
+						position: centerPosition.getValue()!,
+						radius,
+						area: 0,
+					})
+			})
+		}
+
+		// 左键点击事件
+		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.LEFT_CLICK, ({ position }) => {
+			if (!isDrawing || centerPoint) return
+			const cartesian3 = this.getMousePosition(position)
+			if (!cartesian3) return
+			centerPoint = this.viewer.entities.add({
+				position: cartesian3,
+				point: {
+					pixelSize: 12,
+					color: this.COLOR.Warning,
+					heightReference: HeightReference.CLAMP_TO_GROUND,
+				},
+			})
+			updateEllipseEntity()
+			this.updateTooltip({ text: '双击完成', visible: true })
+		})
+
+		// 鼠标移动事件
+		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.MOUSE_MOVE, ({ endPosition }) => {
+			Cartesian2.clone(endPosition, currentMousePosition)
+			// 绘制预览
+			if (isDrawing && centerPosition.getValue()) {
+				const radius = radiusProperty.getValue()
+				// 显示半径距离
+				this.updateTooltip({
+					text: `半径: ${NumberUtil.formatDistance(radius)}`,
+					visible: true,
+				})
+			}
+			// 悬停提示
+			if (!isDrawing && ellipseEntity) {
+				const pick = this.viewer.scene.pick(endPosition)
+				if (pick && (pick.id === ellipseEntity || pick.id === endPoint))
+					this.updateTempTooltip({
+						visible: true,
+						text: `半径: ${NumberUtil.formatDistance(lastRadius)}`,
+						position: {
+							left: endPosition.x + left,
+							top: endPosition.y + top,
+						},
+					})
+				else this.updateTempTooltip({ visible: false })
+			}
+		})
+
+		// 双击事件
+		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.LEFT_DOUBLE_CLICK, ({ position }) => {
+			if (!isDrawing || !centerPosition.getValue()) return
+			const cartesian3 = this.getMousePosition(position)
+			if (!cartesian3) return
+			// 添加半径终点
+			if (!endPoint)
+				endPoint = this.viewer.entities.add({
+					position: cartesian3,
+					point: {
+						pixelSize: 10,
+						color: this.COLOR.Primary,
+						outlineColor: Color.WHITE,
+						outlineWidth: 2,
+						heightReference: HeightReference.CLAMP_TO_GROUND,
+					},
+				})
+			isDrawing = false
+			this.updateTooltip({ visible: false })
+			emitEvent()
+		})
+
+		// 鼠标左键按下
+		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.LEFT_DOWN, ({ position }) => {
+			if (isDrawing || !endPoint) return
+			const pick = this.viewer.scene.pick(position)
+			if (pick && pick.id === endPoint) {
+				isDragging = true
+				this.viewer.scene.screenSpaceCameraController.enableInputs = false
+			}
+		})
+
+		// 鼠标左键松开
+		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.LEFT_UP, () => {
+			if (isDragging) {
+				isDragging = false
+				this.viewer.scene.screenSpaceCameraController.enableInputs = true
+				emitEvent()
+			}
+		})
+
+		// 销毁实现
+		const destroy = () => {
+			if (centerPoint) {
+				this.viewer.entities.remove(centerPoint)
+				centerPoint = null
+			}
+			if (endPoint) {
+				this.viewer.entities.remove(endPoint)
+				endPoint = null
+			}
+			if (ellipseEntity) {
+				this.viewer.entities.remove(ellipseEntity)
+				ellipseEntity = null
+			}
+		}
+
+		return { destroy }
 	}
 }

@@ -26,6 +26,9 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
+      earcut:
+        specifier: ^3.0.2
+        version: 3.0.2
       es-toolkit:
         specifier: ^1.39.4
         version: 1.39.4
@@ -66,6 +69,9 @@ importers:
       '@prettier/plugin-oxc':
         specifier: ^0.0.4
         version: 0.0.4
+      '@types/earcut':
+        specifier: ^3.0.0
+        version: 3.0.0
       '@vitejs/plugin-vue':
         specifier: ^6.0.0
         version: 6.0.0(rolldown-vite@7.0.8(@types/node@24.0.3)(esbuild@0.25.5)(jiti@2.4.2)(sass-embedded@1.89.2)(sass@1.89.2))(vue@3.5.17)
@@ -926,6 +932,9 @@ packages:
   '@tybys/wasm-util@0.9.0':
     resolution: {integrity: sha512-6+7nlbMVX/PVDCwaIQ8nTOPveOcFLSt8GcXdx8hD0bt39uWxYT88uXzqTd4fTvqta7oeUJqudepapKNt2DYJFw==}
 
+  '@types/earcut@3.0.0':
+    resolution: {integrity: sha512-k/9fOUGO39yd2sCjrbAJvGDEQvRwRnQIZlBz43roGwUZo5SHAmyVvSFyaVVZkicRVCaDXPKlbxrUcBuJoSWunQ==}
+
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
@@ -1269,8 +1278,8 @@ packages:
   draco3d@1.5.7:
     resolution: {integrity: sha512-m6WCKt/erDXcw+70IJXnG7M3awwQPAsZvJGX5zY7beBqpELw6RDGkYVU0W43AFxye4pDZ5i2Lbyc/NNGqwjUVQ==}
 
-  earcut@3.0.1:
-    resolution: {integrity: sha512-0l1/0gOjESMeQyYaK5IDiPNvFeu93Z/cO0TjZh9eZ1vyCtZnA7KMZ8rQggpsJHIbGSdrqYq9OhuveadOVHCshw==}
+  earcut@3.0.2:
+    resolution: {integrity: sha512-X7hshQbLyMJ/3RPhyObLARM2sNxxmRALLKx1+NVFFnQ9gKzmCrxm9+uLIAdBcvc8FNLpctqlQ2V6AE92Ol9UDQ==}
 
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
@@ -2572,7 +2581,7 @@ snapshots:
       bitmap-sdf: 1.0.4
       dompurify: 3.2.6
       draco3d: 1.5.7
-      earcut: 3.0.1
+      earcut: 3.0.2
       grapheme-splitter: 1.0.4
       jsep: 1.4.0
       kdbush: 4.0.2
@@ -3043,6 +3052,8 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
+  '@types/earcut@3.0.0': {}
+
   '@types/estree@1.0.8': {}
 
   '@types/katex@0.16.7': {}
@@ -3419,7 +3430,7 @@ snapshots:
 
   draco3d@1.5.7: {}
 
-  earcut@3.0.1: {}
+  earcut@3.0.2: {}
 
   eastasianwidth@0.2.0: {}
 
