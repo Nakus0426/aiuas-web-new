@@ -20,11 +20,17 @@ export const useAppStore = defineStore(
 		}
 		// #endregion
 
-		return { init, setting, dict }
+		// #region 本地偏好设置
+		const preferences = ref({
+			cesiumMeasureClampToGround: false,
+		})
+		// #endregion
+
+		return { setting, dict, preferences, init }
 	},
 	{
 		persist: {
-			pick: ['setting', 'dict'],
+			pick: ['setting', 'dict', 'preference'],
 		},
 	},
 )

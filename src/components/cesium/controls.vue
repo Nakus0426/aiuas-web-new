@@ -1,17 +1,12 @@
 <script setup lang="ts">
-import { isNotNil } from 'es-toolkit'
+import { isNotNil, throttle } from 'es-toolkit'
 import { useHook } from './hook'
 import { Cartesian2, Cartesian3, Math as CesiumMath, EasingFunction } from 'cesium'
+import type { ControlsProps } from './types'
+
+const { scene = true, zoom = true, reset = true, compass = true } = defineProps<ControlsProps>()
 
 const { viewer, isScene3D, resetCamera } = useHook()
-
-watchOnce(viewer, () => {
-	initCompass()
-})
-
-onBeforeUnmount(() => {
-	viewer.value.scene.preRender.removeEventListener(updateCompass)
-})
 
 // #region 指南针
 const compassTransform = ref<string>()
@@ -20,11 +15,7 @@ let lastCompassPitch = 0
 let lastCompassHeadingDegree = 0
 let isCompassFirstUpdate = true
 
-function initCompass() {
-	viewer.value.scene.preRender.addEventListener(updateCompass)
-}
-
-function updateCompass() {
+const updateCompass = throttle(() => {
 	const { heading, pitch } = viewer.value.camera
 	const THRESHOLD = 0.01
 	if (
@@ -48,6 +39,14 @@ function updateCompass() {
 	const rotationDegree = lastCompassHeadingDegree + diff
 	compassTransform.value = `rotate(${rotationDegree}deg) rotateX(${rotationXDegree}deg)`
 	lastCompassHeading = rotationDegree
+}, 200)
+
+function initCompass() {
+	viewer.value.scene.preRender.addEventListener(() => updateCompass())
+}
+
+function destroyCompass() {
+	viewer.value.scene.preRender.removeEventListener(() => updateCompass())
 }
 
 function handleCompassClick() {
@@ -116,11 +115,22 @@ function handleSceneClick() {
 	resetCamera()
 }
 // #endregion
+
+onMounted(() => {
+	if (compass) initCompass()
+})
+
+watch(
+	() => compass,
+	value => (value ? initCompass() : destroyCompass()),
+)
+
+onBeforeUnmount(() => destroyCompass())
 </script>
 
 <template>
 	<div class="cesium-controls">
-		<NTooltip>
+		<NTooltip v-if="scene">
 			<template #trigger>
 				<button class="button compass" @click="handleSceneClick()">
 					<Icon height="26" width="26" :icon="isScene3D ? 'mdi:video-2d' : 'mdi:video-3d'" />
@@ -128,7 +138,7 @@ function handleSceneClick() {
 			</template>
 			{{ isScene3D ? '切换至2D' : '切换至3D' }}
 		</NTooltip>
-		<div class="button-group">
+		<div class="button-group" v-if="zoom">
 			<NTooltip>
 				<template #trigger>
 					<button ref="zoomOut" @click="handleZoomClick(false)">
@@ -146,7 +156,7 @@ function handleSceneClick() {
 				放大
 			</NTooltip>
 		</div>
-		<NTooltip>
+		<NTooltip v-if="reset">
 			<template #trigger>
 				<button class="button location">
 					<Icon icon="tabler:current-location-filled" />
@@ -154,7 +164,7 @@ function handleSceneClick() {
 			</template>
 			重置视角
 		</NTooltip>
-		<NTooltip>
+		<NTooltip v-if="compass">
 			<template #trigger>
 				<button class="button compass" @click="handleCompassClick()">
 					<img :style="{ transform: compassTransform }" alt="compass" src="@/assets/images/cesium-compass.svg" />

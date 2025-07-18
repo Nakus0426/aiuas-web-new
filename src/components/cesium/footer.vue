@@ -11,21 +11,11 @@ import {
 	ScreenSpaceEventType,
 } from 'cesium'
 import { debounce, isNotNil } from 'es-toolkit'
+import type { FooterProps } from './types'
+
+const { location = true, scale = true } = defineProps<FooterProps>()
 
 const { viewer } = useHook()
-
-watchOnce(viewer, () => {
-	initCursorPosition()
-	initScale()
-})
-
-onBeforeUnmount(() => {
-	if (cursorPositionSubscriber) {
-		cursorPositionSubscriber.destroy()
-		cursorPositionSubscriber = null
-	}
-	viewer.value.scene.camera.changed.removeEventListener(updateScale)
-})
 
 // #region 鼠标位置
 let cursorPositionSubscriber: EventSubscriber
@@ -44,14 +34,8 @@ const latitudeText = computed(() => {
 
 function initCursorPosition() {
 	cursorPositionSubscriber = new EventSubscriber(viewer.value)
-	const getTerrainHeight = debounce(async (cartographic: Cartographic) => {
-		const positions = await sampleTerrainMostDetailed(viewer.value.terrainProvider, [cartographic])
-		const height = positions[0].height
-		if (!isFinite(height)) return
-		terrainHeight.value = positions[0].height
-	}, 50)
-	cursorPositionSubscriber.subscribeEvent(ScreenSpaceEventType.MOUSE_MOVE, ({ endPosition }) => {
-		const ray = viewer.value.scene.camera.getPickRay(endPosition)
+	const update = debounce(async (position: Cartesian2) => {
+		const ray = viewer.value.scene.camera.getPickRay(position)
 		if (!ray) return
 		const cartesian3 = viewer.value.scene.globe.pick(ray, viewer.value.scene)
 		if (!cartesian3) return
@@ -59,8 +43,18 @@ function initCursorPosition() {
 		longitude.value = CesiumMath.toDegrees(cartographic.longitude)
 		latitude.value = CesiumMath.toDegrees(cartographic.latitude)
 		ellipsoidHeight.value = cartographic.height
-		getTerrainHeight(cartographic)
-	})
+		const positions = await sampleTerrainMostDetailed(viewer.value.terrainProvider, [cartographic])
+		const height = positions[0].height
+		if (!isFinite(height)) return
+		terrainHeight.value = positions[0].height
+	}, 100)
+	cursorPositionSubscriber.subscribeEvent(ScreenSpaceEventType.MOUSE_MOVE, ({ endPosition }) => update(endPosition))
+}
+
+function destroyCursorPosition() {
+	if (!cursorPositionSubscriber) return
+	cursorPositionSubscriber.destroy()
+	cursorPositionSubscriber = null
 }
 // #endregion
 
@@ -69,10 +63,15 @@ const SCALE_VALUE_LIST = [
 	5, 10, 20, 30, 50, 100, 200, 300, 500, 1000, 2000, 3000, 5000, 10000, 20000, 30000, 50000, 100000, 200000, 300000,
 	500000, 1000000, 2000000, 3000000, 5000000, 10000000, 20000000, 30000000, 50000000,
 ]
-const scale = ref({ width: '0px', unit: '', value: 0 })
+const scaleData = ref({ width: '0px', unit: '', value: 0 })
 
 function initScale() {
+	destroyScale()
 	viewer.value.scene.camera.changed.addEventListener(updateScale)
+}
+
+function destroyScale() {
+	viewer.value.scene.camera.changed.removeEventListener(updateScale)
 }
 
 function updateScale() {
@@ -85,7 +84,7 @@ function updateScale() {
 	const rightPosition = viewer.value.scene.globe.pick(right, viewer.value.scene)
 
 	if (!defined(leftPosition) || !defined(rightPosition)) {
-		scale.value = { width: '0px', unit: '', value: 0 }
+		scaleData.value = { width: '0px', unit: '', value: 0 }
 		return
 	}
 
@@ -100,21 +99,40 @@ function updateScale() {
 
 	if (defined(distance)) {
 		const isKm = distance >= 1000
-		scale.value = {
+		scaleData.value = {
 			width: `${(distance / pixelDistance) | 0}px`,
 			unit: isKm ? ' km' : ' m',
 			value: isKm ? distance / 1000 : distance,
 		}
 		return
 	}
-	scale.value = { width: '0px', unit: '', value: 0 }
+	scaleData.value = { width: '0px', unit: '', value: 0 }
 }
 // #endregion
+
+onMounted(() => {
+	if (location) initCursorPosition()
+	if (scale) initScale()
+})
+
+watch(
+	() => location,
+	value => (value ? initCursorPosition() : destroyCursorPosition()),
+)
+watch(
+	() => scale,
+	value => (value ? initScale() : destroyScale()),
+)
+
+onBeforeUnmount(() => {
+	destroyCursorPosition()
+	destroyScale()
+})
 </script>
 
 <template>
 	<div class="cesium-footer">
-		<div class="cesium-footer_prefix">
+		<div class="cesium-footer_prefix" v-if="location">
 			<NTooltip>
 				<template #trigger>
 					<span>{{ longitudeText }}</span>
@@ -141,11 +159,11 @@ function updateScale() {
 			</NTooltip>
 		</div>
 		<div class="cesium-footer_suffix">
-			<NTooltip>
+			<NTooltip v-if="scale">
 				<template #trigger>
-					<div class="scale" :style="{ width: scale.width }" v-show="scale.value > 0">
+					<div class="scale" :style="{ width: scaleData.width }" v-show="scaleData.value > 0">
 						<div class="scale_sign" />
-						<div class="scale_text">{{ `${scale.value}${scale.unit}` }}</div>
+						<div class="scale_text">{{ `${scaleData.value}${scaleData.unit}` }}</div>
 					</div>
 				</template>
 				比例尺

@@ -77,11 +77,6 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 		viewer.value.screenSpaceEventHandler.removeInputAction(ScreenSpaceEventType.LEFT_DOUBLE_CLICK)
 	}
 
-	onMounted(async () => {
-		await nextTick()
-		init()
-	})
-
 	onBeforeUnmount(() => {
 		if (viewer.value) {
 			viewer.value.destroy()
@@ -213,6 +208,7 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 		isScene3D,
 		organizationId,
 		measureActived,
+		init,
 		resetCamera,
 		flyToPosition,
 		flyToTarget,
