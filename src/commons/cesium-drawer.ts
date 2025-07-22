@@ -52,7 +52,6 @@ export namespace EventHandler {
 	export interface PolylineEvent {
 		entity: Entity
 		positions: Cartesian3[]
-		distances: number[]
 		distance: number
 	}
 
@@ -388,9 +387,9 @@ export class CesiumDrawer {
 	private initPolylineDrawer() {
 		let isDrawing = true
 		const fixedPositions: Cartesian3[] = []
-		let vertexEntities = new CustomDataSource('vertexEntities')
+		let vertexEntities = new CustomDataSource()
 		this.viewer.dataSources.add(vertexEntities)
-		let midPoints = new CustomDataSource('midPoints')
+		let midPoints = new CustomDataSource()
 		this.viewer.dataSources.add(midPoints)
 		const distances: number[] = []
 		let previewPosition: Cartesian3
@@ -500,7 +499,6 @@ export class CesiumDrawer {
 					(callback as EventHandler.PolylineEventCallback)({
 						entity: activePolyline,
 						positions: fixedPositions,
-						distances,
 						distance: distances.reduce((a, b) => a + b, 0),
 					})
 			})
@@ -705,9 +703,9 @@ export class CesiumDrawer {
 		let lastClickTime = 0
 		let isDrawing = true
 		const fixedPositions: Cartesian3[] = []
-		let vertexEntities = new CustomDataSource('vertexEntities')
+		let vertexEntities = new CustomDataSource()
 		this.viewer.dataSources.add(vertexEntities)
-		let midPoints = new CustomDataSource('midPoints')
+		let midPoints = new CustomDataSource()
 		this.viewer.dataSources.add(midPoints)
 		let previewPosition: Cartesian3
 		let activePolygon: Entity

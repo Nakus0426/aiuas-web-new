@@ -1,17 +1,16 @@
 <script setup lang="ts">
 import { useProvideHook } from '@/components/cesium/hook'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
-import ContextMenu from './context-menu.vue'
-import Search from './search.vue'
-import Layers from './layers.vue'
-import Measure from './measure​.vue'
-import Settings from './settings.vue'
-import { ControlsProps, FooterProps } from './types'
+import type { ContextMenuProps, ControlsProps, FooterProps, LayersProps, MeasureProps, SearchProps } from './types'
 import { merge } from 'es-toolkit'
 
-const { footerOption, controlsOption } = defineProps<{
+const { footerOption, controlsOption, contextMenuOption, searchOption, layersOption, measureOption } = defineProps<{
 	footerOption?: FooterProps
 	controlsOption?: ControlsProps
+	contextMenuOption?: ContextMenuProps
+	searchOption?: SearchProps
+	layersOption?: LayersProps
+	measureOption?: MeasureProps
 }>()
 
 const containerRef = useTemplateRef('container')
@@ -27,6 +26,28 @@ const Controls = computed(() =>
 	mergedControlsOption.value.enable && viewer.value ? defineAsyncComponent(() => import('./controls.vue')) : null,
 )
 
+const mergedContextMenuOption = computed(() => merge({ enable: true }, contextMenuOption || {}))
+const ContextMenu = computed(() =>
+	mergedContextMenuOption.value.enable && viewer.value
+		? defineAsyncComponent(() => import('./context-menu.vue'))
+		: null,
+)
+
+const mergedSearchOption = computed(() => merge({ enable: true }, searchOption || {}))
+const Search = computed(() =>
+	mergedSearchOption.value.enable && viewer.value ? defineAsyncComponent(() => import('./search.vue')) : null,
+)
+
+const mergedLayersOption = computed(() => merge({ enable: true }, layersOption || {}))
+const Layers = computed(() =>
+	mergedLayersOption.value.enable && viewer.value ? defineAsyncComponent(() => import('./layers.vue')) : null,
+)
+
+const mergedMeasureOption = computed(() => merge({ enable: true }, measureOption || {}))
+const Measure = computed(() =>
+	mergedMeasureOption.value.enable && viewer.value ? defineAsyncComponent(() => import('./measure​.vue')) : null,
+)
+
 onMounted(async () => {
 	await nextTick()
 	init()
@@ -40,12 +61,11 @@ defineExpose({ flyToPosition, flyToTarget })
 		<div class="cesium_container" ref="container" />
 		<component v-bind="mergedControlsOption" :is="Controls" v-if="Controls" />
 		<component v-bind="mergedFooterOption" :is="Footer" v-if="Footer" />
-		<ContextMenu />
+		<component v-bind="mergedContextMenuOption" :is="ContextMenu" v-if="Footer" />
 		<div class="cesium-toolbar">
-			<Search />
-			<Layers />
-			<!-- <Measure /> -->
-			<Settings />
+			<component v-bind="mergedSearchOption" :is="Search" v-if="Search" />
+			<component v-bind="mergedLayersOption" :is="Layers" v-if="Layers" />
+			<component v-bind="mergedMeasureOption" :is="Measure" v-if="Measure" />
 		</div>
 	</div>
 </template>

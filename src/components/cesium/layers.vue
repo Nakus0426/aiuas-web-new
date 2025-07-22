@@ -12,14 +12,12 @@ import {
 import { useHook } from './hook'
 import { type CheckboxGroupProps } from 'naive-ui'
 import { flatMap, flattenDeep } from 'es-toolkit'
+import { LayersProps } from './types'
+
+const { restrictedFlightZone = true } = defineProps<LayersProps>()
 
 const { viewer, organizationId } = useHook()
 const message = useMessage()
-
-watchOnce(viewer, () => {
-	viewer.value.dataSources.add(restrictedFlightZoneDataSource)
-	initRestrictedFlightZone()
-})
 
 // #region 限飞区
 const enum RestrictedFlightZoneEnum {
@@ -81,6 +79,7 @@ const restrictedFlightZones = ref<RestrictedFlightZoneEnum[]>([RestrictedFlightZ
 
 async function initRestrictedFlightZone() {
 	try {
+		viewer.value.dataSources.add(restrictedFlightZoneDataSource)
 		const res = await BaseApis.general.getApiRestrictedFlyZoneGetRestrictedFlyZone({ params: { organizationId } })
 		if (!res.data?.restrictedFlyZoneFileId) return
 		const file = await BaseApis.general.getApiFileDownload1({
@@ -108,8 +107,14 @@ async function initRestrictedFlightZone() {
 	}
 }
 
+function destroyRestrictedFlightZone() {
+	restrictedFlightZoneDataSource.entities.removeAll()
+	viewer.value.dataSources.remove(restrictedFlightZoneDataSource)
+	restrictedFlightZoneDataSource = null
+}
+
 function drawRestrictedFlightZone(_level) {
-	restrictedFlightZoneData.forEach(({ lng, lat, color, shape, radius, polygon_points, level }) => {
+	restrictedFlightZoneData.forEach(({ lng, lat, color, radius, polygon_points, level }) => {
 		if (level !== _level) return
 		const entity = new Entity({ position: Cartesian3.fromDegrees(lng, lat), properties: { level } })
 		const material = Color.fromCssColorString(color)
@@ -138,11 +143,18 @@ const handleRestrictedFlightZonesUpdate: CheckboxGroupProps['onUpdate:value'] = 
 			.forEach(item => restrictedFlightZoneDataSource.entities.remove(item))
 }
 
-onBeforeUnmount(() => {
-	restrictedFlightZoneDataSource.entities.removeAll()
-	viewer.value.dataSources.remove(restrictedFlightZoneDataSource)
-	restrictedFlightZoneDataSource = null
+onMounted(() => {
+	if (restrictedFlightZone) initRestrictedFlightZone()
 })
+
+onBeforeUnmount(() => destroyRestrictedFlightZone())
+
+watch(
+	() => restrictedFlightZone,
+	value => {
+		value ? initRestrictedFlightZone() : destroyRestrictedFlightZone()
+	},
+)
 // #endregion
 </script>
 
@@ -159,33 +171,35 @@ onBeforeUnmount(() => {
 			</NTooltip>
 		</template>
 		<div class="layers_popover">
-			<div class="layers_popover_header">图层设置</div>
-			<OverlayScrollbar class="layers_popover_body">
-				<div class="cell">
-					<div class="cell_header">限飞区</div>
-					<div class="cell_body">
-						<NCheckboxGroup v-model:value="restrictedFlightZones" @update:value="handleRestrictedFlightZonesUpdate">
-							<NCheckbox v-for="item in restrictedFlightZoneOptions" :key="item.key" :value="item.key">
-								<NFlex align="center" size="small">
-									<div
-										:style="{
-											height: 'var(--font-size)',
-											width: 'var(--font-size)',
-											borderWidth: '1px',
-											borderStyle: 'solid',
-											borderRadius: 'var(--n-border-radius)',
-											borderColor: `rgb(${item.color})`,
-											backgroundColor: `rgba(${item.color},0.3)`,
-										}"
-									/>
-									<span>{{ item.label }}</span>
-									<HelpTooltip>{{ item.tip }}</HelpTooltip>
-								</NFlex>
-							</NCheckbox>
-						</NCheckboxGroup>
+			<template v-if="restrictedFlightZone">
+				<div class="layers_popover_header">图层设置</div>
+				<OverlayScrollbar class="layers_popover_body">
+					<div class="cell">
+						<div class="cell_header">限飞区</div>
+						<div class="cell_body">
+							<NCheckboxGroup v-model:value="restrictedFlightZones" @update:value="handleRestrictedFlightZonesUpdate">
+								<NCheckbox v-for="item in restrictedFlightZoneOptions" :key="item.key" :value="item.key">
+									<NFlex align="center" size="small">
+										<div
+											:style="{
+												height: 'var(--font-size)',
+												width: 'var(--font-size)',
+												borderWidth: '1px',
+												borderStyle: 'solid',
+												borderRadius: 'var(--n-border-radius)',
+												borderColor: `rgb(${item.color})`,
+												backgroundColor: `rgba(${item.color},0.3)`,
+											}"
+										/>
+										<span>{{ item.label }}</span>
+										<HelpTooltip>{{ item.tip }}</HelpTooltip>
+									</NFlex>
+								</NCheckbox>
+							</NCheckboxGroup>
+						</div>
 					</div>
-				</div>
-			</OverlayScrollbar>
+				</OverlayScrollbar>
+			</template>
 		</div>
 	</NPopover>
 </template>

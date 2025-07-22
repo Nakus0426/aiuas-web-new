@@ -35,3 +35,39 @@ export interface ControlsProps {
 	 */
 	compass?: boolean
 }
+
+export interface ContextMenuProps {
+	/**
+	 * 是否启用
+	 */
+	enable?: boolean
+	/**
+	 * 是否启用坐标复制
+	 */
+	copyLocation?: boolean
+}
+
+export interface SearchProps {
+	/**
+	 * 是否启用
+	 */
+	enable?: boolean
+}
+
+export interface LayersProps {
+	/**
+	 * 是否启用
+	 */
+	enable?: boolean
+	/**
+	 * 是否启用限飞区
+	 */
+	restrictedFlightZone?: boolean
+}
+
+export interface MeasureProps {
+	/**
+	 * 是否启用
+	 */
+	enable?: boolean
+}

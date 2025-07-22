@@ -3,14 +3,24 @@ import { CesiumDrawer, DrawMode, Event, type EventHandler } from '@/commons/cesi
 import { useHook } from './hook'
 import { AnimatePresence, Motion } from 'motion-v'
 import { NumberUtil } from '@/commons/number-util'
+import {
+	Cartesian3,
+	Color,
+	CustomDataSource,
+	type Entity,
+	HeightReference,
+	Rectangle,
+	ScreenSpaceEventType,
+	clone as cesiumClone,
+	sampleTerrainMostDetailed,
+} from 'cesium'
+import { EventSubscriber } from '@/commons/cesium-screen-space-event-subscriber'
+import { CesiumUtil } from '@/commons/cesium-util'
 
 const { id, measureActived, viewer } = useHook()
+const themeVars = useThemeVars()
 
-watchOnce(viewer, value => {
-	drawer = new CesiumDrawer(id, value, isDistance.value ? DrawMode.Polyline : DrawMode.Polygon)
-})
-
-// #region 初始化工具
+// #region 初始化
 const enum Mode {
 	Distance,
 	Area,
@@ -20,7 +30,25 @@ const isDistance = computed(() => mode.value === Mode.Distance)
 let drawer: CesiumDrawer
 let callbackId: string
 
-function init() {
+function destroy() {
+	drawer.off(callbackId)
+	drawer.deactivate()
+	drawer = null
+	if (eventSubscriber) {
+		eventSubscriber.destroy()
+		eventSubscriber = null
+	}
+	if (entityDataSource) {
+		viewer.value.dataSources.remove(entityDataSource, true)
+		entityDataSource = null
+	}
+	if (tooltipElement) {
+		tooltipElement.remove()
+		tooltipElement = null
+	}
+}
+
+function enter() {
 	measureActived.value = true
 	drawer.activate()
 	callbackId = drawer.on(isDistance.value ? Event.Polyline : Event.Polygon, handleDrawUpdate)
@@ -35,17 +63,32 @@ function exit() {
 function handleModeUpdate() {
 	drawer.deactivate()
 	drawer = new CesiumDrawer(id, viewer.value, isDistance.value ? DrawMode.Polyline : DrawMode.Polygon)
-	init()
+	enter()
 }
 
-watch(measureActived, value => (value ? init() : exit()))
+watch(measureActived, value => (value ? enter() : exit()))
+
+onMounted(() => {
+	drawer = new CesiumDrawer(id, viewer.value, isDistance.value ? DrawMode.Polyline : DrawMode.Polygon)
+	viewer.value.dataSources.add(entityDataSource)
+	cesiumUtil = new CesiumUtil(viewer.value)
+	initMouseHoverHandler()
+})
+
+onBeforeUnmount(() => destroy())
 // #endregion
 
+// #region 绘制事件
 const distanceDefault = '- 米'
 const areaDefault = '- 平方米'
 const distance = ref(distanceDefault)
 const area = ref(areaDefault)
 const perimeter = ref(distanceDefault)
+const enum TempEntityTypeEnum {
+	Polyline,
+	Polygon,
+}
+let tempEntity: { type: TempEntityTypeEnum; entity: Entity }
 
 function handleDrawUpdate({
 	entity,
@@ -53,6 +96,10 @@ function handleDrawUpdate({
 	area: _area,
 	perimeter: _perimeter,
 }: EventHandler.PolylineEvent & EventHandler.PolygonEvent) {
+	tempEntity = {
+		type: isDistance.value ? TempEntityTypeEnum.Polyline : TempEntityTypeEnum.Polygon,
+		entity: cesiumClone(entity),
+	}
 	if (isDistance.value) distance.value = NumberUtil.formatDistance(_distance)
 	else {
 		area.value = NumberUtil.formatArea(_area)
@@ -70,6 +117,115 @@ function handleResetClick() {
 function handleUndoClick() {
 	drawer.undo()
 }
+// #endregion
+
+// #region 保存
+let eventSubscriber: EventSubscriber
+let entityDataSource = new CustomDataSource()
+let tooltipElement: HTMLDivElement
+let cesiumUtil: CesiumUtil
+
+function initMouseHoverHandler() {
+	eventSubscriber = new EventSubscriber(viewer.value)
+	tooltipElement = document.createElement('div')
+	tooltipElement.style.cssText = `
+			position: absolute;
+			top: 0;
+			left: 0;
+			display: block;
+			visibility: hidden;
+			opacity: 0;
+			transition: opacity 0.2s var(--cubic-bezier-ease-in-out);
+			border-radius: var(--border-radius);
+			background-color: #262626;
+			color: var(--base-color);
+			font-size: var(--font-size-small);
+			padding: 2px 8px;
+			box-shadow: var(--box-shadow-2);
+			pointer-events: none;
+		`
+	document.getElementById(id).appendChild(tooltipElement)
+	eventSubscriber.subscribeEvent(ScreenSpaceEventType.MOUSE_MOVE, ({ endPosition }) => {
+		const pick = viewer.value.scene.pick(endPosition)
+		const { tooltip } = pick?.id?.properties?.getValue() ?? {}
+		if (!tooltip) {
+			tooltipElement.style.visibility = 'hidden'
+			tooltipElement.style.opacity = '0'
+			return
+		}
+		const { x, y } = viewer.value.scene.cartesianToCanvasCoordinates(pick.id.position.getValue())
+		const { top, left } = viewer.value.canvas.getBoundingClientRect()
+		tooltipElement.innerText = tooltip
+		tooltipElement.style.visibility = 'visible'
+		tooltipElement.style.opacity = '1'
+		tooltipElement.style.transform = `translate3d(${left + x}px, calc(${top + y}px - 100%), 0)`
+	})
+}
+
+async function handleSaveClick() {
+	const { type, entity } = tempEntity
+	const { infoColor } = themeVars.value
+	const color = Color.fromCssColorString(infoColor)
+	if (type === TempEntityTypeEnum.Polyline) {
+		const positions = entity.polyline.positions.getValue()
+		entityDataSource.entities.add({
+			polyline: {
+				positions,
+				material: color,
+				width: 4,
+				clampToGround: true,
+			},
+		})
+		let totalDistance = 0
+		positions.forEach(async (item, index) => {
+			const pointEntity = entityDataSource.entities.add({
+				position: item,
+				point: {
+					color,
+					pixelSize: 8,
+					outlineWidth: 2,
+					outlineColor: Color.WHITE,
+					disableDepthTestDistance: Number.POSITIVE_INFINITY,
+				},
+				properties: {},
+			})
+			if (index === 0) return pointEntity.properties.addProperty('tooltip', '起点')
+			const distance = await cesiumUtil.groundDistance([item, positions[index - 1]])
+			totalDistance += distance
+			pointEntity.properties.addProperty('tooltip', NumberUtil.formatDistance(totalDistance))
+		})
+		return
+	}
+	const hierarchy = entity.polygon.hierarchy.getValue()
+	const positions = [...hierarchy.positions, hierarchy.positions[0]]
+	const rectangle = Rectangle.fromCartesianArray(hierarchy.positions)
+	const centerCartographic = Rectangle.center(rectangle)
+	const centerCartographicWithHeight = await sampleTerrainMostDetailed(viewer.value.terrainProvider, [
+		centerCartographic,
+	])
+	const polygonEntity = entityDataSource.entities.add({
+		position: Cartesian3.fromRadians(
+			centerCartographic.longitude,
+			centerCartographic.latitude,
+			centerCartographicWithHeight[0].height,
+		),
+		polygon: {
+			hierarchy,
+			material: color.withAlpha(0.5),
+			heightReference: HeightReference.CLAMP_TO_GROUND,
+		},
+		polyline: {
+			positions,
+			width: 4,
+			material: color,
+			clampToGround: true,
+		},
+		properties: {},
+	})
+	const area = await cesiumUtil.groundPolygonArea(positions)
+	polygonEntity.properties.addProperty('tooltip', NumberUtil.formatArea(area))
+}
+// #endregion
 </script>
 
 <template>
@@ -163,6 +319,14 @@ function handleUndoClick() {
 							</div>
 						</NTabPane>
 					</NTabs>
+					<div class="measure-popover_footer">
+						<NButton size="small" type="primary" @click="handleSaveClick()">
+							<template #icon>
+								<Icon icon="tabler:flag-3" />
+							</template>
+							保存
+						</NButton>
+					</div>
 				</Motion>
 			</AnimatePresence>
 		</Teleport>
@@ -208,7 +372,7 @@ function handleUndoClick() {
 		width: 250px;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 8px;
 		border-radius: var(--border-radius);
 		box-shadow: var(--box-shadow-1);
 		background-color: var(--card-color);
@@ -237,7 +401,7 @@ function handleUndoClick() {
 		&_body {
 			display: flex;
 			flex-direction: column;
-			gap: 4px;
+			gap: 8px;
 
 			.tip {
 				color: var(--text-color-3);
@@ -247,6 +411,10 @@ function handleUndoClick() {
 				display: flex;
 				justify-content: space-between;
 			}
+		}
+
+		&_footer {
+			padding-top: 8px;
 		}
 	}
 }
