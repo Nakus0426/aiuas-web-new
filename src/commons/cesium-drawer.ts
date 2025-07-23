@@ -1,26 +1,27 @@
+import { useLocationIcon } from '@/hooks/use-dynamic-svg'
 import {
 	type Entity,
 	type Viewer,
+	CallbackPositionProperty,
+	CallbackProperty,
 	Cartesian2,
 	Cartesian3,
+	Math as CesiumMath,
+	Color,
+	ConstantPositionProperty,
+	ConstantProperty,
+	CustomDataSource,
 	HeadingPitchRange,
 	HeightReference,
 	HorizontalOrigin,
 	ScreenSpaceEventType,
 	VerticalOrigin,
-	Math as CesiumMath,
-	Color,
-	CallbackProperty,
-	CallbackPositionProperty,
-	ConstantProperty,
-	CustomDataSource,
 } from 'cesium'
-import { EventSubscriber } from './cesium-screen-space-event-subscriber'
-import { nanoid } from 'nanoid'
-import { useLocationIcon } from '@/hooks/use-dynamic-svg'
 import { isNotNil } from 'es-toolkit'
-import { NumberUtil } from './number-util'
+import { nanoid } from 'nanoid'
+import { EventSubscriber } from './cesium-screen-space-event-subscriber'
 import { CesiumUtil } from './cesium-util'
+import { NumberUtil } from './number-util'
 
 // #region 类型
 export const enum DrawMode {
@@ -67,7 +68,6 @@ export namespace EventHandler {
 		position: Cartesian3
 		radius: number
 		area: number
-		perimeter: number
 	}
 
 	export type MouseMoveEventCallback = (event: MouseMoveEvent) => void
@@ -988,7 +988,6 @@ export class CesiumDrawer {
 		let ellipseEntity: Entity | null = null
 		let isDrawing = true
 		let isDragging = false
-		let lastRadius = 0
 		let currentMousePosition = new Cartesian2()
 		const { left, top } = this.viewer.canvas.getBoundingClientRect()
 
@@ -1001,7 +1000,6 @@ export class CesiumDrawer {
 		const centerPosition = new CallbackPositionProperty(() => centerPoint?.position?.getValue() ?? null, false)
 		const endPosition = new CallbackPositionProperty(() => endPoint?.position?.getValue() ?? null, false)
 		const previewPosition = new CallbackPositionProperty(() => {
-			if (isDragging) return endPosition.getValue()
 			if (isDrawing && centerPosition.getValue()) {
 				const ray = this.viewer.scene.camera.getPickRay(currentMousePosition)
 				return ray ? this.viewer.scene.globe.pick(ray, this.viewer.scene) : null
@@ -1010,23 +1008,36 @@ export class CesiumDrawer {
 		}, false)
 		const radiusProperty = new CallbackProperty(() => {
 			const center = centerPosition.getValue()
-			const end = previewPosition.getValue()
-			if (!center || !end) return 0
-			return Cartesian3.distance(center, end)
+			if (!center) return 1
+			let end = null
+			if (isDragging) end = endPosition.getValue()
+			else if (isDrawing) end = previewPosition.getValue()
+			else end = endPosition.getValue()
+			if (!end) return 1
+			return Math.max(Cartesian3.distance(center, end), 1)
 		}, false)
 		const linePositions = new CallbackProperty(() => {
 			const center = centerPosition.getValue()
-			const end = previewPosition.getValue()
-			if (!center || !end) return []
-			return [center, end]
+			if (!center) return []
+			if (isDragging) {
+				const end = endPosition.getValue()
+				return end ? [center, end] : []
+			}
+			if (isDrawing) {
+				const end = previewPosition.getValue()
+				return end ? [center, end] : []
+			}
+			return []
 		}, false)
 
 		// 创建/更新圆形实体
 		const updateEllipseEntity = () => {
+			if (!centerPosition.getValue()) return
 			if (!ellipseEntity) {
 				ellipseEntity = this.viewer.entities.add({
 					position: centerPosition,
 					ellipse: {
+						show: new CallbackProperty(() => radiusProperty.getValue() > 1, false),
 						semiMajorAxis: radiusProperty,
 						semiMinorAxis: radiusProperty,
 						material: Color.WHITE.withAlpha(0.5),
@@ -1042,7 +1053,6 @@ export class CesiumDrawer {
 					},
 				})
 			}
-			lastRadius = radiusProperty.getValue()
 		}
 
 		// 抛出事件
@@ -1050,10 +1060,8 @@ export class CesiumDrawer {
 			if (!ellipseEntity || !centerPosition.getValue()) return
 			const position = centerPosition.getValue()
 			const radius = radiusProperty.getValue()
-			const [area, perimeter] = await Promise.all([
-				this.util.groundEllipseArea(position, radius),
-				this.util.groundEllipsePerimeter(position, radius),
-			])
+			if (!position || radius <= 0) return
+			const area = await this.util.groundEllipseArea(position, radius)
 			this.eventHandlers.forEach(({ event, callback }) => {
 				if (event === Event.Ellipse)
 					(callback as EventHandler.EllipseEventCallback)({
@@ -1061,7 +1069,6 @@ export class CesiumDrawer {
 						position,
 						radius,
 						area,
-						perimeter,
 					})
 			})
 		}
@@ -1076,16 +1083,31 @@ export class CesiumDrawer {
 				point: {
 					pixelSize: 12,
 					color: this.COLOR.Warning,
+					outlineWidth: 2,
+					outlineColor: Color.WHITE.withAlpha(0.5),
 					heightReference: HeightReference.CLAMP_TO_GROUND,
+					disableDepthTestDistance: Number.POSITIVE_INFINITY,
 				},
 			})
 			updateEllipseEntity()
-			this.updateTooltip({ text: '双击完成', visible: true })
 		})
 
 		// 鼠标移动事件
 		this.eventSubscriber.subscribeEvent(ScreenSpaceEventType.MOUSE_MOVE, ({ endPosition }) => {
 			Cartesian2.clone(endPosition, currentMousePosition)
+			// 拖动时更新终点位置
+			if (isDragging && endPoint) {
+				const cartesian3 = this.getMousePosition(endPosition)
+				if (cartesian3) {
+					endPoint.position = new ConstantPositionProperty(cartesian3)
+					const radius = radiusProperty.getValue()
+					this.updateTooltip({
+						text: `半径: ${NumberUtil.formatDistance(radius)}`,
+						visible: true,
+					})
+				}
+				return
+			}
 			// 绘制预览
 			if (isDrawing && centerPosition.getValue()) {
 				const radius = radiusProperty.getValue()
@@ -1096,12 +1118,12 @@ export class CesiumDrawer {
 				})
 			}
 			// 悬停提示
-			if (!isDrawing && ellipseEntity) {
+			if (!isDrawing && !isDragging && ellipseEntity) {
 				const pick = this.viewer.scene.pick(endPosition)
 				if (pick && (pick.id === ellipseEntity || pick.id === endPoint))
 					this.updateTempTooltip({
 						visible: true,
-						text: `半径: ${NumberUtil.formatDistance(lastRadius)}`,
+						text: `半径: ${NumberUtil.formatDistance(radiusProperty.getValue())}`,
 						position: {
 							left: endPosition.x + left,
 							top: endPosition.y + top,
@@ -1122,10 +1144,11 @@ export class CesiumDrawer {
 					position: cartesian3,
 					point: {
 						pixelSize: 10,
-						color: this.COLOR.Primary,
+						color: this.COLOR.Warning,
 						outlineColor: Color.WHITE,
 						outlineWidth: 2,
 						heightReference: HeightReference.CLAMP_TO_GROUND,
+						disableDepthTestDistance: Number.POSITIVE_INFINITY,
 					},
 				})
 			isDrawing = false
@@ -1140,6 +1163,8 @@ export class CesiumDrawer {
 			if (pick && pick.id === endPoint) {
 				isDragging = true
 				this.viewer.scene.screenSpaceCameraController.enableInputs = false
+				Cartesian2.clone(position, currentMousePosition)
+				this.updateTempTooltip({ visible: false })
 			}
 		})
 
@@ -1148,6 +1173,8 @@ export class CesiumDrawer {
 			if (isDragging) {
 				isDragging = false
 				this.viewer.scene.screenSpaceCameraController.enableInputs = true
+				this.updateTooltip({ visible: false })
+
 				emitEvent()
 			}
 		})

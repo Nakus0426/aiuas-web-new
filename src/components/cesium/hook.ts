@@ -201,6 +201,8 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 
 	const measureActived = ref(false)
 
+	const drawerActived = ref(false)
+
 	return {
 		id,
 		viewer,
@@ -208,6 +210,7 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 		isScene3D,
 		organizationId,
 		measureActived,
+		drawerActived,
 		init,
 		resetCamera,
 		flyToPosition,

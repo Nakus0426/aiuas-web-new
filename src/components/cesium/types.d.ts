@@ -71,3 +71,10 @@ export interface MeasureProps {
 	 */
 	enable?: boolean
 }
+
+export interface DrawerProps {
+	/**
+	 * 是否启用
+	 */
+	enable?: boolean
+}

@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { CesiumDrawer, DrawMode, Event, type EventHandler } from '@/commons/cesium-drawer'
-import { useHook } from './hook'
-import { AnimatePresence, Motion } from 'motion-v'
+import { EventSubscriber } from '@/commons/cesium-screen-space-event-subscriber'
+import { CesiumUtil } from '@/commons/cesium-util'
 import { NumberUtil } from '@/commons/number-util'
 import {
 	Cartesian3,
 	Color,
 	CustomDataSource,
-	type Entity,
 	HeightReference,
 	Rectangle,
 	ScreenSpaceEventType,
 	clone as cesiumClone,
 	sampleTerrainMostDetailed,
+	type Entity,
 } from 'cesium'
-import { EventSubscriber } from '@/commons/cesium-screen-space-event-subscriber'
-import { CesiumUtil } from '@/commons/cesium-util'
+import { AnimatePresence, Motion } from 'motion-v'
+import { useHook } from './hook'
 
 const { id, measureActived, viewer } = useHook()
 const themeVars = useThemeVars()
@@ -30,26 +30,9 @@ const isDistance = computed(() => mode.value === Mode.Distance)
 let drawer: CesiumDrawer
 let callbackId: string
 
-function destroy() {
-	drawer.off(callbackId)
-	drawer.deactivate()
-	drawer = null
-	if (eventSubscriber) {
-		eventSubscriber.destroy()
-		eventSubscriber = null
-	}
-	if (entityDataSource) {
-		viewer.value.dataSources.remove(entityDataSource, true)
-		entityDataSource = null
-	}
-	if (tooltipElement) {
-		tooltipElement.remove()
-		tooltipElement = null
-	}
-}
-
 function enter() {
 	measureActived.value = true
+	drawer = new CesiumDrawer(id, viewer.value, isDistance.value ? DrawMode.Polyline : DrawMode.Polygon)
 	drawer.activate()
 	callbackId = drawer.on(isDistance.value ? Event.Polyline : Event.Polygon, handleDrawUpdate)
 }
@@ -58,24 +41,17 @@ function exit() {
 	measureActived.value = false
 	drawer.off(callbackId)
 	drawer.deactivate()
+	drawer = null
 }
 
 function handleModeUpdate() {
+	drawer.off(callbackId)
 	drawer.deactivate()
-	drawer = new CesiumDrawer(id, viewer.value, isDistance.value ? DrawMode.Polyline : DrawMode.Polygon)
+	drawer = null
 	enter()
 }
 
 watch(measureActived, value => (value ? enter() : exit()))
-
-onMounted(() => {
-	drawer = new CesiumDrawer(id, viewer.value, isDistance.value ? DrawMode.Polyline : DrawMode.Polygon)
-	viewer.value.dataSources.add(entityDataSource)
-	cesiumUtil = new CesiumUtil(viewer.value)
-	initMouseHoverHandler()
-})
-
-onBeforeUnmount(() => destroy())
 // #endregion
 
 // #region 绘制事件
@@ -226,6 +202,32 @@ async function handleSaveClick() {
 	polygonEntity.properties.addProperty('tooltip', NumberUtil.formatArea(area))
 }
 // #endregion
+
+onMounted(() => {
+	viewer.value.dataSources.add(entityDataSource)
+	cesiumUtil = new CesiumUtil(viewer.value)
+	initMouseHoverHandler()
+})
+
+onBeforeUnmount(() => {
+	if (drawer) {
+		drawer.off(callbackId)
+		drawer.deactivate()
+		drawer = null
+	}
+	if (eventSubscriber) {
+		eventSubscriber.destroy()
+		eventSubscriber = null
+	}
+	if (entityDataSource) {
+		viewer.value.dataSources.remove(entityDataSource, true)
+		entityDataSource = null
+	}
+	if (tooltipElement) {
+		tooltipElement.remove()
+		tooltipElement = null
+	}
+})
 </script>
 
 <template>
@@ -233,7 +235,7 @@ async function handleSaveClick() {
 		<NTooltip>
 			<template #trigger>
 				<button class="measure-button" :actived="measureActived" @click="measureActived = !measureActived">
-					<Icon width="24" height="24" icon="tabler:ruler-measure" />
+					<Icon width="24" height="24" icon="gis:measure" />
 				</button>
 			</template>
 			测量工具
@@ -250,7 +252,7 @@ async function handleSaveClick() {
 				>
 					<div class="measure-popover_header">
 						<div class="measure-popover_header_prefix">
-							<Icon icon="tabler:ruler-measure" />
+							<Icon icon="gis:measure" />
 							<span>测量工具</span>
 						</div>
 						<div class="measure-popover_header_suffix">
@@ -322,7 +324,7 @@ async function handleSaveClick() {
 					<div class="measure-popover_footer">
 						<NButton size="small" type="primary" @click="handleSaveClick()">
 							<template #icon>
-								<Icon icon="tabler:flag-3" />
+								<Icon icon="mdi:content-save-outline" />
 							</template>
 							保存
 						</NButton>

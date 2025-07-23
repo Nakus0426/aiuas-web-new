@@ -30,19 +30,29 @@ export class CesiumUtil {
 	 * @param  segments - 分段数
 	 */
 	generateCircleVertices(centerPosition: Cartesian3, radius: number, segments: number) {
+		// 验证输入参数
+		if (!centerPosition || !radius || !segments || radius <= 0 || segments <= 0) return []
 		const positions = []
-		// 创建局部参考坐标系
-		const localFrame = Transforms.eastNorthUpToFixedFrame(centerPosition)
-		const transform = Matrix4.inverse(localFrame, new Matrix4())
-		for (let i = 0; i < segments; i++) {
-			const angle = (2 * Math.PI * i) / segments
-			const east = Math.sin(angle) * radius
-			const north = Math.cos(angle) * radius
-			// 局部位置
-			const localPosition = new Cartesian3(east, north, 0)
-			// 转换为全局坐标
-			const position = Matrix4.multiplyByPoint(transform, localPosition, new Cartesian3())
-			positions.push(position)
+		try {
+			// 创建局部参考坐标系
+			const localFrame = Transforms.eastNorthUpToFixedFrame(centerPosition)
+			const transform = Matrix4.inverse(localFrame, new Matrix4())
+			for (let i = 0; i < segments; i++) {
+				const angle = (2 * Math.PI * i) / segments
+				const east = Math.sin(angle) * radius
+				const north = Math.cos(angle) * radius
+				// 验证计算结果
+				if (!isFinite(east) || !isFinite(north)) continue
+				// 局部位置
+				const localPosition = new Cartesian3(east, north, 0)
+				// 转换为全局坐标
+				const position = Matrix4.multiplyByPoint(transform, localPosition, new Cartesian3())
+				// 验证转换后的坐标
+				if (position && isFinite(position.x) && isFinite(position.y) && isFinite(position.z)) positions.push(position)
+			}
+		} catch (error) {
+			console.error('Error generating circle vertices:', error)
+			return []
 		}
 		return positions
 	}
@@ -252,6 +262,8 @@ export class CesiumUtil {
 	 * @param radius 半径
 	 */
 	async groundEllipseArea(centerPosition: Cartesian3, radius: number) {
+		// 检查输入参数的有效性
+		if (!centerPosition || radius <= 0) return 0
 		// 对小半径直接返回椭球面面积
 		if (radius < 100) return this.ellipsoidEllipseArea(centerPosition, radius)
 		// 根据半径自适应设置分段数
@@ -321,6 +333,8 @@ export class CesiumUtil {
 	 * @param radius 半径
 	 */
 	ellipsoidEllipseArea(centerPosition: Cartesian3, radius: number) {
+		// 检查输入参数的有效性
+		if (!centerPosition || radius <= 0) return 0
 		// 1. 获取椭球体的几何参数
 		const radii = this.ellipsoid.radii
 		const radiiSquared = this.ellipsoid.radiiSquared
@@ -339,62 +353,5 @@ export class CesiumUtil {
 		// 6. 精确计算椭球面上的圆形面积
 		// 公式: A = 2πN²(1 - cos(δ))
 		return 2 * Math.PI * N * N * (1 - Math.cos(delta))
-	}
-
-	/**
-	 * 计算圆形周长（贴地）
-	 * @param centerPosition 圆心坐标
-	 * @param radius 半径
-	 */
-	async groundEllipsePerimeter(centerPosition: Cartesian3, radius: number) {
-		// 对小半径直接返回椭球面周长
-		if (radius < 100) return this.ellipsoidEllipsePerimeter(centerPosition, radius)
-		// 自适应设置分段数
-		const segments = Math.min(180, Math.max(20, Math.ceil(Math.min(radius / 10, 180))))
-		// 自适应地形采样LOD
-		const terrainLevel = radius > 5000 ? (radius > 20000 ? 9 : 11) : 13
-		// 1. 生成圆形边界上的点
-		const positions = this.generateCircleVertices(centerPosition, radius, segments)
-		// 添加起始点作为闭合点
-		positions.push(positions[0].clone())
-		// 2. 转换点为地理坐标
-		const cartographicList = positions.map(item => this.ellipsoid.cartesianToCartographic(item))
-		// 3. 获取地形高度
-		await sampleTerrain(this.viewer.terrainProvider, terrainLevel, cartographicList)
-		// 4. 计算相邻点之间的贴地距离
-		let totalPerimeter = 0
-		for (let i = 0; i < cartographicList.length - 1; i++) {
-			const start = cartographicList[i]
-			const end = cartographicList[i + 1]
-			// 使用椭球体测地线计算
-			const geodesic = new EllipsoidGeodesic(start, end)
-			totalPerimeter += geodesic.surfaceDistance
-		}
-		return totalPerimeter
-	}
-
-	/**
-	 * 计算圆形周长（椭球）
-	 * @param centerPosition 圆心坐标
-	 * @param radius 半径
-	 */
-	ellipsoidEllipsePerimeter(centerPosition: Cartesian3, radius: number) {
-		// 1. 获取椭球参数
-		const radii = this.ellipsoid.radii
-		const radiiSquared = this.ellipsoid.radiiSquared
-		// 2. 计算偏心率平方
-		const eccentricitySquared = 1 - radiiSquared.z / radiiSquared.x
-		// 3. 将圆心转换为经纬度坐标
-		const centerCartographic = this.ellipsoid.cartesianToCartographic(centerPosition)
-		if (!centerCartographic) return 0
-		// 4. 计算卯酉圈曲率半径 (N)
-		const sinPhi = Math.sin(centerCartographic.latitude)
-		const denom = Math.sqrt(1 - eccentricitySquared * sinPhi * sinPhi)
-		const N = radii.x / denom
-		// 5. 计算角半径 (δ)
-		const delta = radius / N
-		// 6. 精确计算椭球面上的圆形周长
-		// 公式: P = 2πN * sin(δ)
-		return 2 * Math.PI * N * Math.sin(delta)
 	}
 }

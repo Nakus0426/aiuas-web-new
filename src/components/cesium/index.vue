@@ -1,17 +1,27 @@
 <script setup lang="ts">
 import { useProvideHook } from '@/components/cesium/hook'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
-import type { ContextMenuProps, ControlsProps, FooterProps, LayersProps, MeasureProps, SearchProps } from './types'
 import { merge } from 'es-toolkit'
+import type {
+	ContextMenuProps,
+	ControlsProps,
+	DrawerProps,
+	FooterProps,
+	LayersProps,
+	MeasureProps,
+	SearchProps,
+} from './types'
 
-const { footerOption, controlsOption, contextMenuOption, searchOption, layersOption, measureOption } = defineProps<{
-	footerOption?: FooterProps
-	controlsOption?: ControlsProps
-	contextMenuOption?: ContextMenuProps
-	searchOption?: SearchProps
-	layersOption?: LayersProps
-	measureOption?: MeasureProps
-}>()
+const { footerOption, controlsOption, contextMenuOption, searchOption, layersOption, measureOption, drawerOption } =
+	defineProps<{
+		footerOption?: FooterProps
+		controlsOption?: ControlsProps
+		contextMenuOption?: ContextMenuProps
+		searchOption?: SearchProps
+		layersOption?: LayersProps
+		measureOption?: MeasureProps
+		drawerOption?: DrawerProps
+	}>()
 
 const containerRef = useTemplateRef('container')
 const { id, viewer, init, flyToPosition, flyToTarget } = useProvideHook(containerRef)
@@ -48,6 +58,11 @@ const Measure = computed(() =>
 	mergedMeasureOption.value.enable && viewer.value ? defineAsyncComponent(() => import('./measure​.vue')) : null,
 )
 
+const mergedDrawerOption = computed(() => merge({ enable: true }, drawerOption || {}))
+const Drawer = computed(() =>
+	mergedDrawerOption.value.enable && viewer.value ? defineAsyncComponent(() => import('./drawer.vue')) : null,
+)
+
 onMounted(async () => {
 	await nextTick()
 	init()
@@ -66,6 +81,7 @@ defineExpose({ flyToPosition, flyToTarget })
 			<component v-bind="mergedSearchOption" :is="Search" v-if="Search" />
 			<component v-bind="mergedLayersOption" :is="Layers" v-if="Layers" />
 			<component v-bind="mergedMeasureOption" :is="Measure" v-if="Measure" />
+			<component v-bind="mergedDrawerOption" :is="Drawer" v-if="Drawer" />
 		</div>
 	</div>
 </template>
