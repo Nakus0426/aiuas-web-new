@@ -1,10 +1,11 @@
 import { type Alova, type AlovaGenerics, createAlova } from 'alova'
+import { createClientTokenAuthentication } from 'alova/client'
 import FetchAdapter, { type FetchRequestInit } from 'alova/fetch'
 import VueHook from 'alova/vue'
-import { createClientTokenAuthentication } from 'alova/client'
 import { isNil } from 'es-toolkit'
-import { API_SERVICE_ALIAS } from '@/configs/amap'
 import { type WatchSource } from 'vue'
+
+import { API_SERVICE_ALIAS } from '@/configs/amap'
 
 // #region 类型
 type AlovaInstance = Alova<

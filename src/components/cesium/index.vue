@@ -24,7 +24,7 @@ const { footerOption, controlsOption, contextMenuOption, searchOption, layersOpt
 	}>()
 
 const containerRef = useTemplateRef('container')
-const { id, viewer, init, flyToPosition, flyToTarget } = useProvideHook(containerRef)
+const { id, viewer, init } = useProvideHook(containerRef)
 
 const mergedFooterOption = computed(() => merge({ enable: true }, footerOption || {}))
 const Footer = computed(() =>
@@ -67,8 +67,6 @@ onMounted(async () => {
 	await nextTick()
 	init()
 })
-
-defineExpose({ flyToPosition, flyToTarget })
 </script>
 
 <template>

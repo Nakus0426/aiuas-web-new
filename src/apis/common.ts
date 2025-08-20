@@ -1,7 +1,7 @@
 import { type AlovaGenerics, createAlova } from 'alova'
+import { type AlovaFrontMiddlewareContext, createClientTokenAuthentication } from 'alova/client'
 import FetchAdapter from 'alova/fetch'
 import VueHook from 'alova/vue'
-import { createClientTokenAuthentication, type AlovaFrontMiddlewareContext } from 'alova/client'
 import { isNil } from 'es-toolkit'
 
 const { onAuthRequired, onResponseRefreshToken } = createClientTokenAuthentication<typeof VueHook>({

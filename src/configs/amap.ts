@@ -1,4 +1,4 @@
-import { Cartesian2, Cartographic, WebMercatorProjection, WebMercatorTilingScheme, Math as CesiumMath } from 'cesium'
+import { Cartesian2, Cartographic, Math as CesiumMath, WebMercatorProjection, WebMercatorTilingScheme } from 'cesium'
 import gcoord from 'gcoord'
 
 export const SUB_DOMAINS = ['1', '2', '3', '4']

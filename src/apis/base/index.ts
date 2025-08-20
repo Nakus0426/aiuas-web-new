@@ -1,5 +1,5 @@
-import { createApis, withConfigType } from './createApis'
 import { createAlovaInstance } from '../common'
+import { createApis, withConfigType } from './createApis'
 
 export const alovaInstance = createAlovaInstance('/aiuas-system-base')
 

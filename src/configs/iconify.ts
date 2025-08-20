@@ -1,7 +1,7 @@
-import { type IconifyJSON, addCollection } from '@iconify/vue'
-import tabler from '@iconify/json/json/tabler.json'
-import mdi from '@iconify/json/json/mdi.json'
 import gis from '@iconify/json/json/gis.json'
+import mdi from '@iconify/json/json/mdi.json'
+import tabler from '@iconify/json/json/tabler.json'
+import { addCollection, type IconifyJSON } from '@iconify/vue'
 
 const custom = {
 	prefix: 'custom',

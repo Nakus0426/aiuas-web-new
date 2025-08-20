@@ -1,7 +1,5 @@
 import { useLocationIcon } from '@/hooks/use-dynamic-svg'
 import {
-	type Entity,
-	type Viewer,
 	CallbackPositionProperty,
 	CallbackProperty,
 	Cartesian2,
@@ -11,11 +9,13 @@ import {
 	ConstantPositionProperty,
 	ConstantProperty,
 	CustomDataSource,
+	Entity,
 	HeadingPitchRange,
 	HeightReference,
 	HorizontalOrigin,
 	ScreenSpaceEventType,
 	VerticalOrigin,
+	Viewer,
 } from 'cesium'
 import { isNotNil } from 'es-toolkit'
 import { nanoid } from 'nanoid'

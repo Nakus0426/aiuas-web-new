@@ -203,10 +203,13 @@ async function handleSaveClick() {
 }
 // #endregion
 
+const popoverTeleportDisable = ref(true)
+
 onMounted(() => {
 	viewer.value.dataSources.add(entityDataSource)
 	cesiumUtil = new CesiumUtil(viewer.value)
 	initMouseHoverHandler()
+	popoverTeleportDisable.value = false
 })
 
 onBeforeUnmount(() => {
@@ -240,7 +243,7 @@ onBeforeUnmount(() => {
 			</template>
 			测量工具
 		</NTooltip>
-		<Teleport defer :to="`#${id}`">
+		<Teleport defer :to="`#${id}`" :disabled="popoverTeleportDisable">
 			<AnimatePresence>
 				<Motion
 					class="measure-popover"

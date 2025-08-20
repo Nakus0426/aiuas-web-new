@@ -63,7 +63,11 @@ function handleUndoClick() {
 function handleSaveClick() {}
 // #endregion
 
-onMounted(() => {})
+const popoverTeleportDisable = ref(true)
+
+onMounted(async () => {
+	popoverTeleportDisable.value = false
+})
 
 onBeforeUnmount(() => {
 	if (drawer) {
@@ -84,7 +88,7 @@ onBeforeUnmount(() => {
 			</template>
 			绘制工具
 		</NTooltip>
-		<Teleport defer :to="`#${id}`">
+		<Teleport defer :to="`#${id}`" :disabled="popoverTeleportDisable">
 			<AnimatePresence>
 				<Motion
 					class="drawer-popover"

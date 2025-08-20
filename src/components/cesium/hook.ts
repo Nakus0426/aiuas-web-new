@@ -1,45 +1,39 @@
-import { useAppStore } from '@/stores/modules/app'
 import {
+	Camera,
 	Cartesian2,
-	SceneMode,
-	ShadowMode,
-	Viewer,
-	Math as CesiumMath,
 	Cartesian3,
-	JulianDate,
+	Cartographic,
+	Math as CesiumMath,
+	CesiumTerrainProvider,
 	ClockRange,
 	ClockStep,
 	HeadingPitchRange,
+	JulianDate,
 	Matrix4,
-	Entity,
-	Camera,
-	Cartographic,
-	CesiumTerrainProvider,
-	type EntityCollection,
-	type DataSource,
-	type ImageryLayer,
-	type Cesium3DTileset,
-	type TimeDynamicPointCloud,
-	UrlTemplateImageryProvider,
+	SceneMode,
 	ScreenSpaceEventType,
+	ShadowMode,
+	UrlTemplateImageryProvider,
+	Viewer,
 } from 'cesium'
-import { isArray } from 'es-toolkit/compat'
+import { nanoid } from 'nanoid'
 import { type ShallowRef } from 'vue'
+
 import TDTPlugin from '@/commons/tdt-plugin'
 import {
-	SUB_DOMAINS as TDT_SUB_DOMAINS,
-	TER_SERVICE as TDT_TER_SERVICE,
-	IMG_SERVICE as TDT_IMG_SERVICE,
-	IBO_SERVICE,
-	CIA_SERVICE as TDT_CIA_SERVICE,
-} from '@/configs/tdt'
-import {
-	SUB_DOMAINS as AMAP_SUB_DOMAINS,
-	IMG_SERVICE as AMAP_IMG_SERVICE,
 	CIA_SERVICE as AMAP_CIA_SERVICE,
+	IMG_SERVICE as AMAP_IMG_SERVICE,
+	SUB_DOMAINS as AMAP_SUB_DOMAINS,
 	AmapMercatorTilingScheme,
 } from '@/configs/amap'
-import { nanoid } from 'nanoid'
+import {
+	IBO_SERVICE,
+	CIA_SERVICE as TDT_CIA_SERVICE,
+	IMG_SERVICE as TDT_IMG_SERVICE,
+	SUB_DOMAINS as TDT_SUB_DOMAINS,
+	TER_SERVICE as TDT_TER_SERVICE,
+} from '@/configs/tdt'
+import { useAppStore } from '@/stores/modules/app'
 
 const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HTMLDivElement>) => {
 	const appStore = useAppStore()
@@ -116,21 +110,6 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 				viewer.value.clock.onTick.removeEventListener(Execution)
 		}
 		viewer.value.clock.onTick.addEventListener(Execution)
-	}
-
-	function flyToPosition(position: Cartesian3 | Cartesian3[]) {
-		let tempEntity: Entity
-		const tempEntityOptions = isArray(position)
-			? { polyline: { positions: position, clampToGround: true } }
-			: { position: position }
-		tempEntity = viewer.value.entities.add(tempEntityOptions)
-		viewer.value.flyTo(tempEntity, { duration: 0.2 })
-	}
-
-	function flyToTarget(
-		target: Entity | Entity[] | EntityCollection | DataSource | ImageryLayer | Cesium3DTileset | TimeDynamicPointCloud,
-	) {
-		viewer.value.flyTo(target, { duration: 0.2 })
 	}
 	// #endregion
 
@@ -213,10 +192,8 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 		drawerActived,
 		init,
 		resetCamera,
-		flyToPosition,
-		flyToTarget,
 		getViewCorners,
 	}
 })
 
-export { useProvideHook, useHook }
+export { useHook, useProvideHook }

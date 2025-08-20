@@ -1,5 +1,5 @@
 import {
-	type Viewer,
+	BoundingSphere,
 	Cartesian2,
 	Cartesian3,
 	Cartographic,
@@ -11,9 +11,11 @@ import {
 	sampleTerrain,
 	sampleTerrainMostDetailed,
 	Transforms,
+	type Viewer,
 	WebMercatorProjection,
 } from 'cesium'
 import earcut from 'earcut'
+import { isArray } from 'es-toolkit/compat'
 
 export class CesiumUtil {
 	private readonly viewer: Viewer
@@ -353,5 +355,14 @@ export class CesiumUtil {
 		// 6. 精确计算椭球面上的圆形面积
 		// 公式: A = 2πN²(1 - cos(δ))
 		return 2 * Math.PI * N * N * (1 - Math.cos(delta))
+	}
+
+	/**
+	 * 相机飞至坐标
+	 * @param position 坐标
+	 */
+	flyToPosition(position: Cartesian3 | Cartesian3[]) {
+		const { center, radius } = BoundingSphere.fromPoints(isArray(position) ? position : [position])
+		this.viewer.camera.flyToBoundingSphere(new BoundingSphere(center, radius), { duration: 0.2 })
 	}
 }
