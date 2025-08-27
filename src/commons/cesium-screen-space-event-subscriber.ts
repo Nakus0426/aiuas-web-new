@@ -1,4 +1,5 @@
 import { Entity, ScreenSpaceEventHandler, ScreenSpaceEventType, Viewer } from 'cesium'
+import { isArray } from 'es-toolkit/compat'
 import { nanoid } from 'nanoid'
 
 type EntityIdentifier = Entity | string
@@ -11,7 +12,7 @@ type ScreenSpaceEventHandlerCallback =
 	| ScreenSpaceEventHandler.TwoPointMotionEventCallback
 
 interface Subscription {
-	eventType: ScreenSpaceEventType
+	id: string
 	entityIds?: string[]
 	callback: ScreenSpaceEventHandlerCallback
 }
@@ -19,24 +20,26 @@ interface Subscription {
 export class EventSubscriber {
 	private viewer: Viewer
 	private handler: ScreenSpaceEventHandler
-	private subscriptions: Subscription[] = []
+	private subscriptions = new Map<ScreenSpaceEventType, Subscription[]>()
+	private viewerDestroyCheckTimer: number
 
 	constructor(viewer: Viewer) {
 		this.viewer = viewer
-		this.handler = new ScreenSpaceEventHandler(viewer.scene.canvas)
+		this.initHandler()
+		this.startViewerDestroyCheck()
 	}
 
 	/**
 	 * 订阅指定事件（全局）
 	 * @param eventType 事件类型
 	 * @param callback 回调函数
-	 * @returns 订阅ID（用于取消订阅）
+	 * @returns 取消订阅函数
 	 */
-	subscribeEvent(eventType: ScreenSpaceEventType, callback: ScreenSpaceEventHandlerCallback): string {
-		const sub: Subscription = { eventType, callback }
-		this.subscriptions.push(sub)
-		this.updateHandler()
-		return this.getSubscriptionId(sub)
+	subscribeEvent(eventType: ScreenSpaceEventType, callback: ScreenSpaceEventHandlerCallback) {
+		if (!this.subscriptions.has(eventType)) this.subscriptions.set(eventType, [])
+		const id = nanoid()
+		this.subscriptions.get(eventType).push({ id, callback })
+		return () => this.unsubscribe(eventType, id)
 	}
 
 	/**
@@ -44,109 +47,74 @@ export class EventSubscriber {
 	 * @param entity 实体或实体ID
 	 * @param eventType 事件类型
 	 * @param callback 回调函数
-	 * @returns 订阅ID（用于取消订阅）
+	 * @returns 取消订阅函数
 	 */
 	subscribeEntityEvent(
-		entity: EntityIdentifier,
 		eventType: ScreenSpaceEventType,
+		entity: EntityIdentifier | EntityIdentifier[],
 		callback: ScreenSpaceEventHandlerCallback,
-	): string {
-		const entityId = this.getEntityId(entity)
-		const sub: Subscription = { eventType, entityIds: [entityId], callback }
-		this.subscriptions.push(sub)
-		this.updateHandler()
-		return this.getSubscriptionId(sub)
-	}
-
-	/**
-	 * 订阅多个实体的指定事件
-	 * @param entities 实体数组
-	 * @param eventType 事件类型
-	 * @param callback 回调函数
-	 * @returns 订阅ID（用于取消订阅）
-	 */
-	subscribeEntitiesEvent(
-		entities: EntityIdentifier[],
-		eventType: ScreenSpaceEventType,
-		callback: ScreenSpaceEventHandlerCallback,
-	): string {
-		const entityIds = entities.map(this.getEntityId)
-		const sub: Subscription = { eventType, entityIds, callback }
-		this.subscriptions.push(sub)
-		this.updateHandler()
-		return this.getSubscriptionId(sub)
+	) {
+		if (!this.subscriptions.has(eventType)) this.subscriptions.set(eventType, [])
+		const id = nanoid()
+		const entityIds = isArray(entity) ? entity.map(this.getEntityId) : [this.getEntityId(entity)]
+		this.subscriptions.get(eventType).push({ id, entityIds, callback })
+		return () => this.unsubscribe(eventType, id)
 	}
 
 	/**
 	 * 取消订阅
 	 * @param subscriptionId 订阅时返回的ID
 	 */
-	unsubscribe(subscriptionId: string): void {
-		const index = this.subscriptions.findIndex(sub => this.getSubscriptionId(sub) === subscriptionId)
-
-		if (index !== -1) {
-			this.subscriptions.splice(index, 1)
-			this.updateHandler()
-		}
+	private unsubscribe(eventType: ScreenSpaceEventType, id: string): void {
+		const subs = this.subscriptions.get(eventType)
+		this.subscriptions.set(
+			eventType,
+			subs.filter(sub => sub.id !== id),
+		)
 	}
 
-	/** 销毁订阅器，释放所有资源 */
+	/**
+	 * 销毁
+	 */
 	destroy(): void {
+		if (this.viewerDestroyCheckTimer) {
+			clearInterval(this.viewerDestroyCheckTimer)
+			this.viewerDestroyCheckTimer = null
+		}
 		this.handler.destroy?.()
 		this.handler = null
-		this.subscriptions = []
+		this.subscriptions.clear()
 		this.viewer = null
 	}
 
-	/** 获取当前活跃订阅数量 */
-	getSubscriptionCount(): number {
-		return this.subscriptions.length
+	/**
+	 * 检测viewer是否被销毁
+	 */
+	private startViewerDestroyCheck() {
+		this.viewerDestroyCheckTimer = setInterval(
+			() => (!this.viewer || this.viewer.isDestroyed()) && this.destroy(),
+			100,
+		) as unknown as number
 	}
 
-	private updateHandler(): void {
-		// 移除所有现有监听
+	private initHandler() {
+		this.handler = new ScreenSpaceEventHandler(this.viewer.scene.canvas)
 		Object.values(ScreenSpaceEventType).forEach((type: ScreenSpaceEventType) => {
-			try {
-				this.handler.removeInputAction(type)
-			} catch (_error) {
-				_error
-				// 忽略未注册事件的错误
-			}
-		})
-		// 按事件类型分组订阅
-		const eventMap = new Map<ScreenSpaceEventType, Subscription[]>()
-		this.subscriptions.forEach(sub => {
-			if (!eventMap.has(sub.eventType)) {
-				eventMap.set(sub.eventType, [])
-			}
-			eventMap.get(sub.eventType)!.push(sub)
-		})
-		// 为每种事件类型设置监听
-		eventMap.forEach((subs, eventType) => {
 			this.handler.setInputAction((event: any) => {
-				let picked: any
+				let picked
 				if (event.position) picked = this.viewer.scene.pickPosition(event.position)
 				if (event.endPosition) picked = this.viewer.scene.pickPosition(event.endPosition)
+				const subs = this.subscriptions.get(type)
+				if (!subs) return
 				subs.forEach(sub => {
-					const shouldTrigger =
-						// 全局事件
-						!sub.entityIds ||
-						// 实体事件且被选中
-						(picked?.id && sub.entityIds.includes(this.getEntityId(picked.id)))
-
-					if (shouldTrigger) {
-						sub.callback(event)
-					}
+					const shouldTrigger = !sub.entityIds || (picked?.id && sub.entityIds.includes(this.getEntityId(picked.id)))
+					if (shouldTrigger) sub.callback(event)
 				})
-			}, eventType)
+			}, type)
 		})
 	}
 
 	private getEntityId(entity: EntityIdentifier): string {
 		return typeof entity === 'string' ? entity : entity.id
-	}
-
-	private getSubscriptionId(sub: Subscription): string {
-		return `${sub.eventType}-${nanoid()}`
 	}
 }

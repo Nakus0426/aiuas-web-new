@@ -62,10 +62,13 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 			scene3DOnly: true,
 			terrainShadows: ShadowMode.DISABLED,
 			sceneMode: SceneMode.SCENE3D,
+			targetFrameRate: 33,
 		})
 		viewer.value.scene.debugShowFramesPerSecond = true
 		viewer.value.scene.globe.depthTestAgainstTerrain = true
-		viewer.value.resolutionScale = window.devicePixelRatio
+		let resolutionScale = window.devicePixelRatio
+		while (resolutionScale >= 2.0) resolutionScale /= 2.0
+		viewer.value.resolutionScale = resolutionScale
 		Camera.DEFAULT_OFFSET = new HeadingPitchRange(0, CesiumMath.toRadians(defaultPitchDegree.value), 0)
 		initBaseLayer()
 		viewer.value.screenSpaceEventHandler.removeInputAction(ScreenSpaceEventType.LEFT_DOUBLE_CLICK)
@@ -114,9 +117,6 @@ const [useProvideHook, useHook] = createInjectionState((container: ShallowRef<HT
 	// #endregion
 
 	// #region 工具函数
-	/**
-	 * 获取视野范围坐标
-	 */
 	function getViewCorners() {
 		if (CesiumMath.toDegrees(viewer.value.camera.pitch) >= 0) throw new Error('相机俯仰角必须小于0°')
 		const rectangle = viewer.value.camera.computeViewRectangle()

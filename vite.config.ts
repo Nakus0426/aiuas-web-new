@@ -70,8 +70,9 @@ export default defineConfig(({ mode }) => {
 			}),
 			Compression({ verbose: false }),
 		],
-		define: { CESIUM_BASE_URL: JSON.stringify('./cesium/') },
+		define: { CESIUM_BASE_URL: JSON.stringify('./cesium/'), global: 'globalThis' },
 		experimental: { enableNativePlugin: true },
+		optimizeDeps: { include: ['cesium'] },
 		css: {
 			preprocessorOptions: {
 				scss: { api: 'modern-compiler', charset: false },
