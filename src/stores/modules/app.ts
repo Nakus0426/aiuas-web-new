@@ -1,8 +1,5 @@
 import { defineStore } from 'pinia'
 
-/**
- * 系统状态
- */
 export const useAppStore = defineStore(
 	'APP',
 	() => {
@@ -23,6 +20,7 @@ export const useAppStore = defineStore(
 		// #region 本地偏好设置
 		const preferences = ref({
 			cesiumMeasureClampToGround: false,
+			darkMode: false,
 		})
 		// #endregion
 

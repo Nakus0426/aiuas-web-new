@@ -6,7 +6,7 @@ useAppStore().init()
 
 <template>
 	<ConfigProvider>
-		<Cesium />
+		<RouterView />
 	</ConfigProvider>
 </template>
 

@@ -101,11 +101,11 @@ export class EventSubscriber {
 		this.handler = new ScreenSpaceEventHandler(this.viewer.scene.canvas)
 		Object.values(ScreenSpaceEventType).forEach((type: ScreenSpaceEventType) => {
 			this.handler.setInputAction((event: any) => {
+				const subs = this.subscriptions.get(type)
+				if (!subs) return
 				let picked
 				if (event.position) picked = this.viewer.scene.pickPosition(event.position)
 				if (event.endPosition) picked = this.viewer.scene.pickPosition(event.endPosition)
-				const subs = this.subscriptions.get(type)
-				if (!subs) return
 				subs.forEach(sub => {
 					const shouldTrigger = !sub.entityIds || (picked?.id && sub.entityIds.includes(this.getEntityId(picked.id)))
 					if (shouldTrigger) sub.callback(event)

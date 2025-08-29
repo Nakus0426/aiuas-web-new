@@ -1,13 +1,20 @@
 {
   "cSpell.words": [
     "Basedata",
+    "Busi",
     "cndesc",
     "eaddress",
     "ename",
+    "glsl",
+    "highp",
     "infocode",
     "isleaf",
+    "lerp",
     "lonlat",
-    "unproject"
+    "snoise",
+    "unproject",
+    "xxzz",
+    "xyxy"
   ],
   "oxc.enable": true,
   "arrayIndexInlay.enabled": true

@@ -553,21 +553,15 @@ export class CesiumDrawer {
 			const { x, y } = this.viewer.scene.cartesianToCanvasCoordinates(entity.position.getValue())
 			const { top, left } = this.viewer.canvas.getBoundingClientRect()
 			const index = entity.properties.getValue().index
+			const position = { left: x + left, top: y + top }
+			if (index === 0) return this.updateTempTooltip({ visible: true, text: '起点', position })
 			let distanceToStart = 0
-			for (let i = 0; i < index; i++) {
-				if (distances[i]) distanceToStart += distances[i]
-			}
-			this.updateTempTooltip({
-				visible: true,
-				text: NumberUtil.formatDistance(distanceToStart),
-				position: { left: x + left, top: y + top },
-			})
+			for (let i = 0; i < index; i++) if (distances[i]) distanceToStart += distances[i]
+			this.updateTempTooltip({ visible: true, text: NumberUtil.formatDistance(distanceToStart), position })
 		}
 
 		// 隐藏节点tooltip
-		const hideVertexTooltip = () => {
-			this.updateTempTooltip({ visible: false })
-		}
+		const hideVertexTooltip = () => this.updateTempTooltip({ visible: false })
 
 		// 拖动节点
 		const startDraggingNode = (entity: Entity) => {
